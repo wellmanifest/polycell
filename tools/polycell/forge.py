@@ -22,6 +22,10 @@ HARNESS = "# Polycell adapter envelope; preserve exactly.\n"
 KERNEL = "fn main() {}\n"
 
 
+class ProposalRejected(ValueError):
+    """A received model answer violated the requested file or contract identity."""
+
+
 def request(package: Path, objective: str) -> dict:
     manifest = verify(package)
     target = "generated/" + manifest["implementation"]
@@ -111,8 +115,12 @@ def propose(package: Path, out: Path, audit: Path, model: str, base_url: str,
     (audit / "metrics.json").write_text(json.dumps(answer["metrics"], indent=2) + "\n")
     if "error" in answer:
         raise ValueError(answer["error"])
-    raw_code = extract(answer["bundle"], manifest)
-    code = stamp_header(raw_code, manifest)
+    (audit / "bundle.json").write_text(json.dumps(answer["bundle"], indent=2) + "\n")
+    try:
+        raw_code = extract(answer["bundle"], manifest)
+        code = stamp_header(raw_code, manifest)
+    except ValueError as error:
+        raise ProposalRejected(str(error)) from error
     answer["metrics"]["header_normalized"] = code != raw_code
     replace(package, code, out, answer["metrics"])
     return {"package": str(out), "metrics": answer["metrics"], "qualification": "required"}
@@ -156,6 +164,13 @@ def regenerate(package: Path, out: Path, audit: Path, model: str, base_url: str,
         try:
             propose(baseline, candidate, directory / "provider", model, base_url,
                     objective + feedback, timeout, reasoning_effort)
+        except ProposalRejected as error:
+            entry.update(stage="proposal_rejected", error=str(error)[-4000:])
+            record()
+            feedback = ("\nThe previous complete proposal failed file or contract validation. "
+                        "Regenerate the ENTIRE file and preserve the unchanged contract and all cases. "
+                        "Diagnostic:\n" + entry["error"])
+            continue
         except (ValueError, RuntimeError, OSError) as error:
             entry["error"] = str(error)[-4000:]
             record()
