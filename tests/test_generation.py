@@ -54,7 +54,7 @@ class GenerationTests(unittest.TestCase):
             with self.subTest(names=(first, second)):
                 paths = []
                 for index, name in enumerate((first, second), 2):
-                    contract = {**original, 'name': name, 'urn': f'urn:wm:cell:shop:{name}:v{index}'}
+                    contract = {**original, 'name': name, 'urn': f'urn:wm:cell:shop:{name}:v2'}
                     path = self.app / f'contracts/cells/collision{index}.cell.yaml'
                     path.write_text(yaml.safe_dump(contract))
                     paths.append(path)

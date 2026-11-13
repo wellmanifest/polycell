@@ -22,7 +22,7 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from standard.conformance import HEADER, IMPURE, interface_hash
-from tools.polycell.model import TypeRef, URN_RE, validate_contract_set
+from tools.polycell.model import TypeRef, URN_RE, runtime_name, validate_contract_set
 
 EXT = {"python": "py", "ts": "ts", "rust": "rs"}
 ARTIFACTS = {"contract.cell.yaml", "cases.json", "types.txt", "prompt.md", "input.schema.json", "output.schema.json"}
@@ -162,22 +162,29 @@ def write_package(out: Path, identity: dict, files: dict[str, bytes]) -> dict:
 def export(name: str, out: Path) -> dict:
     from tools.polycell import prompt
     from tools.polycell.model import load_cells
-    cell = next(c for c in load_cells() if c.name == name)
+    cell = next((c for c in load_cells() if name in (c.name, c.urn)), None)
+    if cell is None:
+        raise ValueError(f'unknown cell: {name}')
+    name = cell.raw['name']
     cases = [c for c in json.loads((ROOT / "tests/generated/cases.json").read_text()) if c["urn"] == cell.urn]
+    # A package contains one URN. Its case identities use the canonical name,
+    # while the assembled application's aliases keep parallel majors distinct.
+    for case in cases:
+        case['name'] = name + case['name'][len(cell.name):]
     types = {"python": "python/polycell_types.py", "ts": "ts/types.ts", "rust": "rust/types.rs"}
     files = {
         "cell." + EXT[cell.owner]: cell.cell_path.read_bytes(),
         "contract.cell.yaml": cell.path.read_bytes(),
         "cases.json": json_bytes(cases),
         "types.txt": (ROOT / "gen" / types[cell.owner]).read_bytes(),
-        "prompt.md": prompt.build(name).encode(),
+        "prompt.md": prompt.build(cell.urn).encode(),
         "README.md": (f"# {cell.urn}\n\nOne editable implementation: cell.{EXT[cell.owner]}.\n"
                       "The remaining files are contract, test, type, prompt and integrity artifacts.\n"
                       "Execution requires the shared Polycell runtime; this is not a standalone application.\n"
                       "Regenerate the complete implementation; qualify against the trusted baseline before assembly.\n").encode(),
     }
     for kind in ("input", "output"):
-        files[f"{kind}.schema.json"] = (ROOT / f"gen/jsonschema/{name}.{kind}.json").read_bytes()
+        files[f"{kind}.schema.json"] = (ROOT / f"gen/jsonschema/{cell.name}.{kind}.json").read_bytes()
     return write_package(out, {"schema": "wellmanifest.polycell.package/v1", "urn": cell.urn, "name": name,
                               "owner": cell.owner, "implementation": "cell." + EXT[cell.owner],
                               "contract": cell.interface_hash, "runtime": "wellmanifest.polycell/v1"}, files)
@@ -298,12 +305,12 @@ def _assemble_into(packages: list[Path], out: Path, runtime: Path, warm: bool, r
             shutil.copyfile(path, out / "tests" / name)
     lock = {"schema": "wellmanifest.polycell.cellset/v1", "packages": [], "processes": []}
     for package, manifest in zip(packages, manifests):
-        name, owner = manifest["name"], manifest["owner"]
+        name, owner = runtime_name(manifest['name'], manifest['urn']), manifest["owner"]
         shutil.copyfile(package / "contract.cell.yaml", out / f"contracts/cells/{name}.cell.yaml")
         shutil.copyfile(package / manifest["implementation"], out / f"cells/{owner}/{name.replace('.', '_')}.{EXT[owner]}")
         cases = json.loads((package / "cases.json").read_text())
         contract = yaml.safe_load((package / "contract.cell.yaml").read_text())
-        examples = {name + ":" + c["name"] for c in contract.get("examples", [])}
+        examples = {manifest['name'] + ":" + c["name"] for c in contract.get("examples", [])}
         (out / f"tests/golden/{name}.jsonl").write_text("".join(json.dumps({k: c[k] for k in ("input", "output")}) + "\n"
                                                                     for c in cases if c.get("name") not in examples))
         commit = None
@@ -375,7 +382,8 @@ def _qualify_snapshot(candidate: Path, oracle: Path, image: str, timeout: int) -
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
-    e = sub.add_parser("export"); e.add_argument("cell"); e.add_argument("--out", type=Path, required=True)
+    e = sub.add_parser("export"); e.add_argument("cell", help="URN or alias: name for v1, name.vN for other majors")
+    e.add_argument("--out", type=Path, required=True)
     e.add_argument("--git", action="store_true"); e.add_argument("--bundle", type=Path)
     v = sub.add_parser("verify"); v.add_argument("package", type=Path)
     a = sub.add_parser("assemble"); a.add_argument("packages", type=Path, nargs="+"); a.add_argument("--out", type=Path, required=True)
