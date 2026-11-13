@@ -77,7 +77,7 @@ def gen_jsonschema(cells: list[Cell], types) -> None:
     for c in cells:
         for kind, fields in (("input", c.input), ("output", c.output)):
             schema = {"$schema": "https://json-schema.org/draft/2020-12/schema",
-                      "$id": f"{c.urn}#{kind}", "title": f"{c.pascal}{kind.title()}",
+                      "$id": f"{c.urn}:{kind}", "title": f"{c.pascal}{kind.title()}",
                       **js_obj(fields), "$defs": defs}
             write(GEN / "jsonschema" / f"{c.name}.{kind}.json", jdump(schema))
 

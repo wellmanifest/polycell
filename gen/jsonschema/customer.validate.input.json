@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wm:cell:shop:customer.validate:v1#input",
+  "$id": "urn:wm:cell:shop:customer.validate:v1:input",
   "title": "CustomerValidateInput",
   "type": "object",
   "additionalProperties": false,

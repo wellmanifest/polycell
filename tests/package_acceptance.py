@@ -57,9 +57,7 @@ def main():
     else:
         raise AssertionError('wrong implementation was accepted')
     app = args.out / 'app'
-    lock = package.assemble(clones, app)
-    subprocess.run([sys.executable, str(app / 'tools/polycell/gen.py')], check=True)
-    subprocess.run([sys.executable, str(app / 'standard/conformance.py'), '--root', str(app)], check=True)
+    lock = package.assemble(clones, app, generate=True)
     report.update(ok=True, elapsed_s=round(time.monotonic() - started, 3), cellset=lock)
     (args.out / 'report.json').write_bytes(package.json_bytes(report))
     print(json.dumps(report, indent=2))

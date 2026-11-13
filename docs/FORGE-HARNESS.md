@@ -52,9 +52,14 @@ Paczka wymaga współdzielonego runtime Polycell — nie jest samodzielnym progr
 Nie zawiera hostów, gatewaya, Dockerfile, zależności npm/pip ani kompilatora.
 
 `verify` sprawdza integralność, schemat kontraktu, nagłówek i wybrane wzorce I/O.
+Schematy wejścia/wyjścia muszą odpowiadać kontraktowi; paczka nie może osłabić
+walidacji własnym schematem. Testy zachowują wszystkie przykłady kontraktu,
+mają zgodne URN/język i unikalne nazwy. Typy kontraktu muszą być samowystarczalne.
 `qualify --oracle ...` dodatkowo porównuje niezmienność kontraktu/testów/typów/promptu
 z osobno wskazaną, zaufaną bazą i wykonuje kod w kontenerze. Prawidłowy JSON ani hash
 nie stanowią odbioru funkcji. Hash jest kontrolą integralności, nie podpisem autora.
+Kwalifikacja tworzy prywatne kopie paczki i bazy bez katalogów `.git`. Raport wskazuje
+hashe tych kopii, więc edycja oryginału podczas testów nie zmienia tożsamości wyniku.
 
 Kontroler nadaje pierwszą linię URN/hash. Może dodać brakujący nagłówek lub poprawić
 nazwę znacznika, ale odrzuca inną tożsamość kontraktu. Nie poprawia ciała funkcji;
@@ -127,6 +132,9 @@ make testql
 
 Assembly tworzy nowy katalog; nie nadpisuje działającej aplikacji. Kopiuje współdzielony
 runtime, odtwarza układ `cells/<lang>/<name>` i kontrakty, a `make gen` tworzy interfejsy.
+CLI publikuje katalog dopiero po generacji i kontroli zgodności. Błąd usuwa katalog
+tymczasowy, umożliwiając ponowienie pod tą samą ścieżką. Konflikty współdzielonych
+typów oraz nazw generowanych typów wejścia/wyjścia są odrzucane przed składaniem.
 Kompozycje POA z runtime są dołączane tylko wtedy, gdy wszystkie ich URN-y występują
 w paczkach. `cellset.lock.json` zapisuje dokładne commity paczek, pełne hashe manifestów
 i hashe procesów. Zmiana jednej funkcji oznacza nowy commit paczki oraz aktualizację
@@ -155,3 +163,10 @@ pakowania bez Dockera, modeli i lokalnego checkoutu Forge; są objęte CI.
 Kwalifikacja pojedynczej paczki obejmuje stdio. Pełny parytet HTTP/gRPC/stdio jest
 osobną bramką złożonej aplikacji. Samo przejście przykładów nie dowodzi poprawności
 na wszystkich wejściach ani nie mierzy szybkości tworzenia dowolnej aplikacji.
+
+Po aktualizacji ze starszego pilota wykonaj `make gen` i ponownie wyeksportuj paczki.
+Poprawiono identyfikatory JSON Schema: `:v1:input` zamiast `:v1#input`, ponieważ
+Draft 2020-12 nie dopuszcza niepustego fragmentu w `$id`. Zmieniają się hashe artefaktów;
+URN i interfejs komórki pozostają takie same. Kandydat wymaga kwalifikacji względem
+ponownie wyeksportowanej bazy. Odpowiedź modelu można jawnie odtworzyć z audytu,
+jeśli jej kontekst nadal odpowiada kontraktowi.

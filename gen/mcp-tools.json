@@ -5,7 +5,7 @@
       "description": "Waliduje i normalizuje dane klienta [urn:wm:cell:shop:customer.validate:v1]",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "urn:wm:cell:shop:customer.validate:v1#input",
+        "$id": "urn:wm:cell:shop:customer.validate:v1:input",
         "title": "CustomerValidateInput",
         "type": "object",
         "additionalProperties": false,
@@ -54,7 +54,7 @@
       "description": "Renderuje treść powiadomienia o zamówieniu (PL/EN) [urn:wm:cell:shop:notify.render:v1]",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "urn:wm:cell:shop:notify.render:v1#input",
+        "$id": "urn:wm:cell:shop:notify.render:v1:input",
         "title": "NotifyRenderInput",
         "type": "object",
         "additionalProperties": false,
@@ -107,7 +107,7 @@
       "description": "Oblicza wycenę koszyka (suma, rabat z kuponu, VAT, razem) [urn:wm:cell:shop:pricing.quote:v1]",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "urn:wm:cell:shop:pricing.quote:v1#input",
+        "$id": "urn:wm:cell:shop:pricing.quote:v1:input",
         "title": "PricingQuoteInput",
         "type": "object",
         "additionalProperties": false,
@@ -158,7 +158,7 @@
       "description": "Shipping cost is a fixed rate, not a per-kilogram multiplication. For country PL: weight_kg <= 5 costs 9.99, otherwise 19.99. For EVERY other country: weight_kg <= 5 costs 29.99, otherwise 49.99. [urn:wm:cell:shop:shipping.cost:v1]",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "urn:wm:cell:shop:shipping.cost:v1#input",
+        "$id": "urn:wm:cell:shop:shipping.cost:v1:input",
         "title": "ShippingCostInput",
         "type": "object",
         "additionalProperties": false,

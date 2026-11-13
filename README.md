@@ -62,7 +62,7 @@ Tę samą wartość należy przekazać do `make dev`, `make parity` i `make benc
 - **Digital twin**: scenariusz UI przez Chrome DevTools Protocol (paleta NL, proces, przełączanie transportu, walidacja) — PASS, zrzuty w `artifacts/twin/`.
 - **Scenariusze TestTOON** (`tests/generated/*.testql.toon.yaml`) — 5/5 PASS.
 - **Docker**: obrazy zbudowane, `make docker-twin` — TestQL i CDP PASS; parytet oraz integracja HTTP/gRPC/stdio także PASS.
-- **Regresje gatewaya**: `make test` — 28 testów (null, błędny JSON, hash kontraktu, błędne wyjście, transport i proces).
+- **Regresje gatewaya i paczek**: `make test` — 39 testów (walidacja, błędy HTTP, Git, zgodność testów z kontraktem, składanie aplikacji i tożsamość kwalifikowanego kodu).
 - **Integracja**: `make integration` — checkout przez trzy protokoły, trzy zapisane wywołania na proces, guard, logi i MCP.
 - **Adopcja legacy**: przechodzą istniejące golden cases; `prune` wykrywa 3 odwołania do starej funkcji. Pełnego cyklu wrap/switch/usunięcie nie powtarzano podczas tej weryfikacji.
 

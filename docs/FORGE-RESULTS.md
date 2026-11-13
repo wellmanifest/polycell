@@ -5,6 +5,36 @@ niezawodnym, bezobsługowym generatorem aplikacji.** Najbardziej przewidywalne s
 pakowanie, odtwarzanie i odbiór. Jakość oraz czas modelu nadal wymagają pomiaru
 na właściwych zadaniach i jasnych kontraktach.
 
+## Poprawki po pilocie
+
+Kolejny przegląd odtworzył błędy na rzeczywistych paczkach i dodał 11 regresji
+(łącznie **39 testów**):
+
+- Przykład kontraktu można było zmienić w `cases.json`, a składanie pomijało taki
+  przypadek jako już obecny w kontrakcie. Walidacja wymaga teraz wszystkich przykładów
+  z niezmienionymi danymi oraz zgodnych URN/języka i unikalnych nazw przypadków.
+- Schemat dostarczony przez paczkę mógł osłabiać kontrolę danych. Schemat i testy są
+  teraz porównywane z kontraktem, a brak lokalnej definicji typu jest błędem.
+- Walidator Draft 2020-12 wykrył niepoprawne `$id` zawierające fragment `#input` lub
+  `#output`. Generator używa teraz końcówek `:input` i `:output`; artefakty odtworzono
+  przez `make gen`. Starsze paczki wymagają ponownego eksportu i kwalifikacji.
+- Nieudane składanie zostawiało częściową aplikację. CLI składa ją teraz w katalogu
+  tymczasowym, sprawdza generację i zgodność, a dopiero potem publikuje wynik.
+  Wykrywane są też konflikty współdzielonych typów.
+- Globalne reguły Git mogły pominąć plik implementacji podczas tworzenia repozytorium.
+  Snapshot dodaje teraz jawnie wszystkie pliki manifestu, niezależnie od globalnych wykluczeń.
+- Kwalifikacja pracuje na prywatnych kopiach bez `.git`; hashe w raporcie opisują te
+  kopie. Zmiana oryginału w trakcie testu nie przypisuje sukcesu innemu kodowi.
+
+Po poprawkach natywne `check`, parytet 45 wywołań, TestQL 5/5, 39 regresji,
+integracja checkout/PGlite/MCP i CDP przeszły. Zapisana odpowiedź Nvidia została
+jawnie odtworzona z audytu na bazie nowych artefaktów: `new_inference_calls: 0`.
+Test paczek w Dockerze przeszedł w **91,86 s**: cztery klony Git, kwalifikacja
+Python/TS/Rust, wygenerowany kandydat 9/9, odrzucenie błędnej funkcji i transakcyjne
+składanie aplikacji. Raport: `.run/fix-package-acceptance/report.json`.
+Złożona aplikacja przeszła także check, parytet 45 wywołań, TestQL 5/5,
+39 regresji, integrację i CDP 20 kroków bez błędów konsoli i sieci.
+
 ## Co rzeczywiście wykonano
 
 - Reużyto wheels Forge 0.3.0 i SubLLM 1.14.0+forge.1 po weryfikacji SHA-256.

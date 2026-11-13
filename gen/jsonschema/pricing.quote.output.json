@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:wm:cell:shop:pricing.quote:v1#output",
+  "$id": "urn:wm:cell:shop:pricing.quote:v1:output",
   "title": "PricingQuoteOutput",
   "type": "object",
   "additionalProperties": false,
