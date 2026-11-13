@@ -1,0 +1,100 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-008",
+  "summary": "Regenerate cells after rejected model envelopes",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-008/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "tests/test_forge.py",
+    "tools/polycell/forge.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "73820323e79d83525ccbe14353f949eefee2f74e",
+    "targetBranch": "main",
+    "outcome": "Regenerate whole files after rejected model file envelopes or contract headers while retaining the original answer and bounded budget.",
+    "nonGoals": [
+      "No retry of provider failures or network errors",
+      "No oracle, contract or function-body repair by the controller",
+      "No managed standard or foreign worktree edits"
+    ],
+    "complexity": "S",
+    "estimatedMinutes": 30,
+    "budgets": {
+      "maxImplementationFiles": 2,
+      "maxAffectedComponents": 2,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Classify model envelope/header rejections separately, retain the original proposal in the private attempt audit, and feed the rejection into the existing bounded whole-file loop. Provider errors keep their existing fail-stop behavior.",
+      "components": [
+        {
+          "name": "generation-adapter",
+          "paths": [
+            "tools/polycell/forge.py"
+          ]
+        },
+        {
+          "name": "regression-tests",
+          "paths": [
+            "tests/test_forge.py"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [
+        {
+          "kind": "component-local-state",
+          "component": "generation-adapter",
+          "description": "Retain the original model bundle in the existing private per-attempt audit; no data migration or ownership transfer."
+        }
+      ],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Independent reviewed revert; preserve original audit evidence."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python -m unittest discover -s tests -p test_forge.py -v"
+        ],
+        "evidence": "Wrong file-key and conflicting header answers retry with the original answer and exact failure retained; only a qualified candidate is published."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "python -m unittest discover -s tests -v"
+        ],
+        "evidence": "Exhaustion keeps the attempt budget and publishes nothing; provider faults stop after one call; all existing regression cases pass."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "bash project/governance-check.sh"
+        ],
+        "evidence": "Required native CI and governance pass; independent exact-head Validator approval and merge."
+      }
+    ]
+  }
+}
