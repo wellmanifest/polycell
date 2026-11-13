@@ -24,6 +24,14 @@ use where while async await dyn abstract become box do final gen macro override 
 typeof unsized virtual yield""".split())
 
 
+def runtime_name(name: str, urn: str) -> str:
+    """Keep v1 aliases stable; isolate all other majors in paths and symbols."""
+    identity = URN_RE.fullmatch(urn)
+    if not identity or identity['name'] != name:
+        raise ValueError('contract name does not match URN')
+    return name if identity['major'] == '1' else f"{name}.v{identity['major']}"
+
+
 def portable_identifier(name: str) -> None:
     # Every contract emits Python and Rust types, regardless of its cell owner.
     if not name.isidentifier() or keyword.iskeyword(name) or name in RUST_KEYWORDS:
@@ -54,7 +62,7 @@ class Cell:
     path: Path
     raw: dict
     urn: str
-    name: str
+    name: str  # Runtime alias; raw['name'] retains the canonical contract name.
     owner: str
     input: dict[str, TypeRef]
     output: dict[str, TypeRef]
@@ -102,13 +110,14 @@ def validate_contract_set(contracts: list[dict]) -> None:
         validator.validate(raw)
         if URN_RE.fullmatch(raw["urn"])["name"] != raw["name"]:
             raise ValueError("contract name does not match URN")
-        symbols = {"urn": raw["urn"], "name": raw["name"], "filename": raw["name"].replace(".", "_"),
-                   "type": "".join(p[:1].upper() + p[1:] for p in re.split(r"[._]", raw["name"]))}
+        alias = runtime_name(raw['name'], raw['urn'])
+        symbols = {"urn": raw["urn"], "name": alias, "filename": alias.replace(".", "_"),
+                   "type": "".join(p[:1].upper() + p[1:] for p in re.split(r"[._]", alias))}
         portable_identifier(symbols["filename"])
         portable_identifier(symbols["type"])
         for key, symbol in symbols.items():
             if symbol in seen[key]:
-                raise ValueError(f"duplicate {key}: {symbol}; parallel majors with the same name are not supported yet")
+                raise ValueError(f"duplicate {key}: {symbol}")
             seen[key].add(symbol)
         known = SCALARS | set(raw.get("types", {}))
         for fields in (raw["input"], raw["output"], *raw.get("types", {}).values()):
@@ -134,7 +143,7 @@ def load_cells(root: Path = ROOT) -> list[Cell]:
     validate_contract_set([raw for _, raw in parsed])
     for p, raw in parsed:
         cells.append(Cell(
-            path=p, raw=raw, urn=raw["urn"], name=raw["name"], owner=raw["owner"],
+            path=p, raw=raw, urn=raw["urn"], name=runtime_name(raw['name'], raw['urn']), owner=raw["owner"],
             input=_fields(raw.get("input")), output=_fields(raw.get("output")),
             types={t: _fields(f) for t, f in (raw.get("types") or {}).items()},
             root=root,

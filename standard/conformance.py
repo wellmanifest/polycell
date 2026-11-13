@@ -55,6 +55,7 @@ def run(root: Path) -> list[dict]:
         m = URN.match(raw["urn"])
         if not m or m["name"] != raw["name"]:
             add("PC001", "error", f"{rel}: urn {raw['urn']} does not match name {raw['name']}")
+            continue
         if raw["owner"] not in LANGS:
             add("PC001", "error", f"{rel}: owner must be one of {sorted(LANGS)}")
             continue
@@ -78,7 +79,9 @@ def run(root: Path) -> list[dict]:
     expected_cells = set()
     for urn, (rel, raw) in contracts.items():
         ext = LANGS[raw["owner"]]
-        cell = root / "cells" / raw["owner"] / f"{raw['name'].replace('.', '_')}.{ext}"
+        major = URN.fullmatch(urn)['major']
+        alias = raw['name'] if major == '1' else f"{raw['name']}.v{major}"
+        cell = root / "cells" / raw["owner"] / f"{alias.replace('.', '_')}.{ext}"
         expected_cells.add(cell.resolve())
         if not cell.exists():
             add("PC003", "error", f"GAP: {urn} has no implementation ({cell.relative_to(root)})")
@@ -88,7 +91,7 @@ def run(root: Path) -> list[dict]:
         if not h or h["urn"] != urn:
             add("PC003", "error", f"{cell.relative_to(root)}: missing/mismatched polycell header")
         elif h["hash"] != interface_hash(raw):
-            add("PC003", "error", f"STALE: {cell.relative_to(root)} implements contract {h['hash']}, current {interface_hash(raw)} -> make prompt CELL={raw['name']}")
+            add("PC003", "error", f"STALE: {cell.relative_to(root)} implements contract {h['hash']}, current {interface_hash(raw)} -> make prompt CELL={alias}")
         if "generate me" in text:
             add("PC003", "warning", f"STUB: {cell.relative_to(root)} not implemented yet")
         if (raw.get("effects") or ["pure"]) == ["pure"] and IMPURE[ext].search(text):

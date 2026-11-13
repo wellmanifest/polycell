@@ -44,7 +44,7 @@ def type_excerpt(c) -> str:
 
 
 def build(name: str, fix: bool = False) -> str:
-    c = next((x for x in load_cells() if x.name == name), None)
+    c = next((x for x in load_cells() if name in (x.name, x.urn)), None)
     if not c:
         raise SystemExit(f"unknown cell {name}")
     rules = RULES[c.owner].format(urn=c.urn, h=c.interface_hash, P=c.pascal)
@@ -73,5 +73,5 @@ def build(name: str, fix: bool = False) -> str:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        raise SystemExit("usage: prompt.py <cell.name> [--fix]")
+        raise SystemExit("usage: prompt.py <cell.alias|URN> [--fix] (v1: name; other majors: name.vN)")
     print(build(sys.argv[1], "--fix" in sys.argv))
