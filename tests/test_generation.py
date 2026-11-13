@@ -12,6 +12,7 @@ import yaml
 from tools.polycell import package
 from tools.polycell.model import load_cells
 from jsonschema import Draft202012Validator, ValidationError
+from gateway import core
 
 
 class GenerationTests(unittest.TestCase):
@@ -152,6 +153,26 @@ class GenerationTests(unittest.TestCase):
                      {'value': 0, 'values': [2**63]}, {'value': 0, 'values': [-(2**63)-1]}):
             with self.subTest(data=data), self.assertRaises(ValidationError):
                 validator.validate(data)
+
+
+class GeneratedNumericContractTests(unittest.TestCase):
+    def test_numeric_bounds_are_checked_in_nested_arrays(self):
+        schema = core._schema('pricing.quote', 'input')
+        def data(qty):
+            return {'items': [{'sku': 'A', 'qty': qty, 'unit_price': 1}], 'currency': 'PLN'}
+        for value in (-(2**31), 0, 2**31-1):
+            self.assertEqual([], core.validate(data(value), schema))
+        for value in (-(2**31)-1, 2**31):
+            with self.subTest(value=value):
+                errors = core.validate(data(value), schema)
+                self.assertTrue(errors)
+                self.assertIn('$.items[0].qty', errors[0])
+
+    def test_nonfinite_numbers_are_rejected(self):
+        for value in (float('nan'), float('inf'), -float('inf')):
+            with self.subTest(value=value):
+                self.assertTrue(core.validate(value, {'type': 'number'}))
+        self.assertEqual([], core.validate(1.5, {'type': 'number'}))
 
 
 if __name__ == '__main__':
