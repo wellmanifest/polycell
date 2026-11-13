@@ -1,0 +1,88 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-013",
+  "summary": "Generate Rust cells with explicit Result and String guidance",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-013/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "tools/polycell/prompt.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "63d084ce45f5acaa08f9b2c29d336e20b63f818a",
+    "targetBranch": "main",
+    "outcome": "Give Rust generation explicit idiomatic guidance for its existing Result return type and String pattern matching, based on retained compiler failures.",
+    "nonGoals": [
+      "No contract, oracle, type or implementation patching by the operator",
+      "No inference budget increase, provider retry change or business-rule hints",
+      "No edits to standard release fields or another writer scope"
+    ],
+    "complexity": "S",
+    "estimatedMinutes": 30,
+    "budgets": {
+      "maxImplementationFiles": 1,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Clarify the Rust language instructions in the existing standalone cell prompt. Validate by the real compiler and trusted package oracle rather than literal-string unit tests.",
+      "components": [
+        {
+          "name": "cell-prompt",
+          "paths": [
+            "tools/polycell/prompt.py"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Independently reviewed revert; retain raw proposal/audit evidence."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python -m unittest discover -s tests -p test_packages.py -v"
+        ],
+        "evidence": "Existing package/adapter tests preserve contract/type/example context and prohibit changes outside the single implementation."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "python tools/polycell/forge.py .subactor/cache/ticket-013/oracle --oracle .subactor/cache/ticket-013/oracle --out .subactor/cache/ticket-013/accepted --audit .subactor/cache/ticket-013/audit --model qwen3-coder:30b --image sha256:a9bc77c8300adffe6aafcb812b7ea9120530b683c5f938e72e8e67187f12634a --attempts 3 --timeout 90 --reasoning-effort none"
+        ],
+        "evidence": "At most three fresh whole-file Rust proposals; actual compiler/oracle determines acceptance; retained failure logs and no manual function edits."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "python -m unittest discover -s tests -v",
+          "bash project/governance-check.sh"
+        ],
+        "evidence": "Required local/native/governance checks and independent exact-head publication; accepted package bundle/clone and application verification when produced."
+      }
+    ]
+  }
+}
