@@ -1,0 +1,8 @@
+{
+  "schema": "wellmanifest.polycell.forge-dependencies/v1",
+  "forge_commit": "ff1c788a4a2cdf2eb8b616d988a797f575632002",
+  "wheels": {
+    "wheels/heyasa_forge_base-0.3.0-py3-none-any.whl": "cd402a81e819ba8550420955ee97842b63cbd72d4a37410a540eadc0421e5ba2",
+    "vendor/subactor_subllm-1.14.0+forge.1-py3-none-any.whl": "70af65cf44967dce90804ec7cc2c1d9eec59abb26e2f0bfd36d5b7e505837936"
+  }
+}

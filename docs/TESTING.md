@@ -1,5 +1,8 @@
 # Weryfikacja polycell — 2026-11-13
 
+Raport pierwszej publikacji (`9effaab`). Późniejsza integracja Forge, dodatkowe przypadki
+graniczne i aktualne wyniki są w [FORGE-RESULTS.md](FORGE-RESULTS.md).
+
 Testy wykonano na Linux x86_64, Python 3.13.12, Node 22.23.1, Cargo 1.97.1,
 Chrome 157 i Docker 29.1.3 / Compose 2.36.0. Python działa w `.venv` z `requirements.txt`.
 Port TS w trybie natywnym: 18102 (8102 zajęty przez inną aplikację).

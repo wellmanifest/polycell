@@ -129,6 +129,54 @@
   },
   {
     "urn": "urn:wm:cell:shop:shipping.cost:v1",
+    "name": "shipping.cost:pl_boundary",
+    "owner": "python",
+    "input": {
+      "weight_kg": 5,
+      "country": "PL"
+    },
+    "output": {
+      "result": 9.99
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:shipping.cost:v1",
+    "name": "shipping.cost:pl_over_boundary",
+    "owner": "python",
+    "input": {
+      "weight_kg": 5.001,
+      "country": "PL"
+    },
+    "output": {
+      "result": 19.99
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:shipping.cost:v1",
+    "name": "shipping.cost:other_boundary",
+    "owner": "python",
+    "input": {
+      "weight_kg": 5,
+      "country": "FR"
+    },
+    "output": {
+      "result": 29.99
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:shipping.cost:v1",
+    "name": "shipping.cost:other_over_boundary",
+    "owner": "python",
+    "input": {
+      "weight_kg": 5.001,
+      "country": "FR"
+    },
+    "output": {
+      "result": 49.99
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:shipping.cost:v1",
     "name": "shipping.cost:golden0",
     "owner": "python",
     "input": {

@@ -4,7 +4,10 @@ urn: urn:wm:cell:shop:shipping.cost:v1
 name: shipping.cost
 version: 0.1.0
 owner: python
-summary: Koszt wysyłki wg starego cennika
+summary: >-
+  Shipping cost is a fixed rate, not a per-kilogram multiplication.
+  For country PL: weight_kg <= 5 costs 9.99, otherwise 19.99.
+  For EVERY other country: weight_kg <= 5 costs 29.99, otherwise 49.99.
 effects:
 - pure
 impl: cell
@@ -28,3 +31,15 @@ examples:
 - name: pl_light
   input: {weight_kg: 3, country: PL}
   output: {result: 9.99}
+- name: pl_boundary
+  input: {weight_kg: 5, country: PL}
+  output: {result: 9.99}
+- name: pl_over_boundary
+  input: {weight_kg: 5.001, country: PL}
+  output: {result: 19.99}
+- name: other_boundary
+  input: {weight_kg: 5, country: FR}
+  output: {result: 29.99}
+- name: other_over_boundary
+  input: {weight_kg: 5.001, country: FR}
+  output: {result: 49.99}

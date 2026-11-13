@@ -7,6 +7,9 @@ DB_URL ?= postgresql://postgres:postgres@127.0.0.1:55432/postgres?sslmode=disabl
 CDP_URL ?= http://127.0.0.1:9222
 APP_URL ?= http://127.0.0.1:8080
 CELL ?=
+FORGE_ROOT ?= $(abspath ../../heyasa/forge)
+PACKAGE ?=
+OUT ?=
 TS_HTTP_PORT ?= 8102
 export HOST_TS_HTTP ?= http://127.0.0.1:$(TS_HTTP_PORT)
 export COMPOSE_BAKE ?= true
@@ -76,6 +79,7 @@ testql: ## scenariusze TestTOON (tests/generated) - testql jeśli zainstalowany,
 chrome: ## lokalny Chrome headless z CDP :9222
 	@mkdir -p $(RUN)/logs
 	google-chrome --headless=new --no-sandbox --disable-gpu --user-data-dir=$(CURDIR)/$(RUN)/chrome --remote-debugging-port=9222 --remote-allow-origins=* about:blank > $(RUN)/logs/chrome.log 2>&1 < /dev/null & echo $$! > $(RUN)/chrome.pid
+	@curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 $(CDP_URL)/json/version > /dev/null
 
 cdp: ## scenariusze UI przez Chrome DevTools Protocol -> artifacts/twin (zrzuty, konsola, sieć)
 	CDP_URL=$(CDP_URL) APP_URL=$(APP_URL) $(NODE) twin/cdp.ts twin/scenarios/*.cdp.tql
@@ -110,6 +114,21 @@ down: ## zatrzymaj docker compose
 	docker compose --profile twin --profile pgserver down
 
 # ---------------------------------------------------------------- adopcja w istniejącym projekcie
+forge-install: ## osobny provider Forge/SubLLM z przypiętych wheels (FORGE_ROOT=...)
+	$(PY) tools/polycell/setup_forge.py --forge-root '$(FORGE_ROOT)'
+
+package-image: ## wspólny sandbox/kompilator paczek (Docker + Forge run_bounded)
+	docker buildx build --load --build-context forge_wheels='$(FORGE_ROOT)/wheels' -f docker/package.Dockerfile -t polycell/package-worker:dev .
+
+package: gen ## paczka z jednym plikiem kodu: make package CELL=shipping.cost OUT=.run/shipping
+	$(PY) tools/polycell/package.py export '$(CELL)' --out '$(OUT)' --git --bundle '$(OUT).bundle'
+
+package-check: ## odbiór w sandboxie: make package-check PACKAGE=... ORACLE=...
+	$(PY) tools/polycell/package.py qualify '$(PACKAGE)' --oracle '$(ORACLE)'
+
+package-test: ## eksport, git bundle, klonowanie, trzy języki, odrzucenie błędu, assembly
+	$(PY) tests/package_acceptance.py --out '$(OUT)' $(if $(CANDIDATE),--candidate '$(CANDIDATE)',)
+
 inventory: ## kandydaci na komórki z istniejącego kodu: make inventory SRC=../projekt lub MAP=map.toon.yaml
 	$(PY) tools/polycell/adopt.py inventory $(if $(MAP),--map $(MAP),) $(if $(SRC),--src $(SRC),)
 
@@ -128,4 +147,4 @@ prune: ## usuń zastąpiony kod legacy (raport; APPLY=1 usuwa): make prune CELL=
 clean: stop ## usuń wygenerowane i runtime
 	rm -rf gen $(RUN) artifacts tests/generated
 
-.PHONY: help install gen check stale prompt new-cell dev dev-sqlite stop parity test integration testql chrome cdp bench mcp-test twin diag up docker-twin logs down inventory wrap golden switch prune clean
+.PHONY: help install gen check stale prompt new-cell dev dev-sqlite stop parity test integration testql chrome cdp bench mcp-test twin diag up docker-twin logs down forge-install package-image package package-check package-test inventory wrap golden switch prune clean

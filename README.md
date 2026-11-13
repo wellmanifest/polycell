@@ -54,7 +54,7 @@ Aktualny zakres, poprawki i ograniczenia opisuje [raport testów](docs/TESTING.m
 Do testów lokalnych użyto `TS_HTTP_PORT=18102`, ponieważ port 8102 zajmowała inna aplikacja.
 Tę samą wartość należy przekazać do `make dev`, `make parity` i `make bench`.
 
-- **Parytet protokołów**: 11 przypadków (przykłady + golden), rozdzielonych między 3 języki, × 3 protokoły {HTTP/JSON, gRPC/protobuf, stdio JSON-lines} = 33 wywołania — wszystkie zgodne z oczekiwaniem (`make parity`).
+- **Parytet protokołów**: 15 przypadków (przykłady + golden), rozdzielonych między 3 języki, × 3 protokoły {HTTP/JSON, gRPC/protobuf, stdio JSON-lines} = 45 wywołań — wszystkie zgodne z oczekiwaniem (`make parity`).
 - **Proces POA** `poa://shop.local/process/checkout/v1`: Python (walidacja) → Rust (wycena) → TS (powiadomienie), z `plan_hash` i `poa.receipt/v1`.
 - **MCP** (JSON-RPC stdio): `initialize`, `tools/list`, `tools/call` (`make mcp-test`).
 - **Postgres bez demona**: PGlite (WASM) przez `@electric-sql/pglite-socket`, gateway przez psycopg; zapis envelope i projekcji.
@@ -62,7 +62,7 @@ Tę samą wartość należy przekazać do `make dev`, `make parity` i `make benc
 - **Digital twin**: scenariusz UI przez Chrome DevTools Protocol (paleta NL, proces, przełączanie transportu, walidacja) — PASS, zrzuty w `artifacts/twin/`.
 - **Scenariusze TestTOON** (`tests/generated/*.testql.toon.yaml`) — 5/5 PASS.
 - **Docker**: obrazy zbudowane, `make docker-twin` — TestQL i CDP PASS; parytet oraz integracja HTTP/gRPC/stdio także PASS.
-- **Regresje gatewaya**: `make test` — 12 testów (null, błędny JSON, hash kontraktu, błędne wyjście, transport i proces).
+- **Regresje gatewaya**: `make test` — 28 testów (null, błędny JSON, hash kontraktu, błędne wyjście, transport i proces).
 - **Integracja**: `make integration` — checkout przez trzy protokoły, trzy zapisane wywołania na proces, guard, logi i MCP.
 - **Adopcja legacy**: przechodzą istniejące golden cases; `prune` wykrywa 3 odwołania do starej funkcji. Pełnego cyklu wrap/switch/usunięcie nie powtarzano podczas tej weryfikacji.
 
@@ -96,12 +96,16 @@ Schemat SQL jest generowany z kontraktu, więc dane i API nie rozjeżdżają si�
 - `embedded://.run/pgdata` — prawdziwy Postgres uruchamiany jako proces potomny aplikacji z paczki pip (`pgembed`, `pgserver` lub `pg0-embedded`); pełna współbieżność. **Ten tryb jest zaimplementowany, ale nie był testowany w tym środowisku.**
 - `sqlite:///…` — zero zależności (CI, szybkie testy). Profil `pgserver` w compose — klasyczny serwer, gdy potrzebny.
 
-**Wiele funkcji w osobnych plikach i osobne repo git na plik?** Plik na funkcję — **tak** (to jest komórka).
-Osobne repozytorium git na plik — **nie polecam**: tracisz atomowe commity obejmujące kontrakt + komórkę + wygenerowane artefakty,
-`bisect`, przegląd zmian i współpracę narzędzi. Ten sam efekt daje jedno repo plus:
-`contracts/polycell.lock.json` (hash interfejsu ↔ hash pliku ↔ status ok/stale), `git log --follow cells/rust/pricing_quote.rs`
-(historia jednej komórki), `git sparse-checkout set contracts cells/rust` (praca na wycinku). Git już przechowuje pliki
-adresowane treścią — identyczne komórki nie zajmują miejsca podwójnie.
+**Jedna komórka jako osobne repozytorium Git?** Tak — nowy profil paczki zawiera jeden plik
+implementacji i artefakty kontraktu, testów oraz typów. `make package` tworzy lokalne repo i `git bundle`;
+`package.py assemble` składa paczki w aplikację, zapisując commity i hashe w `cellset.lock.json`.
+To zachowuje atomową zmianę kodu i kontraktu wewnątrz paczki. Zmiany wielu paczek wymagają osobnego
+commita zestawu zależności aplikacji i pełnych testów. Monorepo pozostaje prostszą opcją dla wspólnej ewolucji.
+
+**Forge + SubLLM.** Adapter korzysta z prawdziwego providera i ograniczonego procesu Forge,
+natywnego routingu/audytu SubLLM oraz testów Polycell w kontenerze bez sieci. Model proponuje cały
+plik; kontroler sprawdza go względem niezmienionego kontraktu i zaufanych przypadków.
+[Instrukcja i format paczek](docs/FORGE-HARNESS.md) · [wyniki rzeczywistego pilota](docs/FORGE-RESULTS.md).
 
 **Jak uniknąć luk w funkcjonalności przy wymianie kodu?** `make check` (standard `wellmanifest/polycell`, kody PC001–PC009) wykrywa:
 **GAP** (kontrakt bez implementacji), **ORPHAN** (kod bez kontraktu), **STALE** (komórka napisana do starej wersji kontraktu),

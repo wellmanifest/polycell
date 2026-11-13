@@ -155,7 +155,7 @@
     },
     {
       "name": "shipping_cost",
-      "description": "Koszt wysyłki wg starego cennika [urn:wm:cell:shop:shipping.cost:v1]",
+      "description": "Shipping cost is a fixed rate, not a per-kilogram multiplication. For country PL: weight_kg <= 5 costs 9.99, otherwise 19.99. For EVERY other country: weight_kg <= 5 costs 29.99, otherwise 49.99. [urn:wm:cell:shop:shipping.cost:v1]",
       "inputSchema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": "urn:wm:cell:shop:shipping.cost:v1#input",

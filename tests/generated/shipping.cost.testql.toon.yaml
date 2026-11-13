@@ -5,9 +5,13 @@
 CONFIG[1]{key, value}:
   base_url, ${GATEWAY_URL:-http://localhost:8080}
 
-API[2]{method, endpoint, expected_status, body}:
+API[6]{method, endpoint, expected_status, body}:
   GET, /health, 200, -
   POST, /api/cells/shipping.cost, 200, {"weight_kg": 3, "country": "PL"}
+  POST, /api/cells/shipping.cost, 200, {"weight_kg": 5, "country": "PL"}
+  POST, /api/cells/shipping.cost, 200, {"weight_kg": 5.001, "country": "PL"}
+  POST, /api/cells/shipping.cost, 200, {"weight_kg": 5, "country": "FR"}
+  POST, /api/cells/shipping.cost, 200, {"weight_kg": 5.001, "country": "FR"}
 
 ASSERT[1]{field, operator, expected}:
-  output.result, ==, 9.99
+  output.result, ==, 49.99

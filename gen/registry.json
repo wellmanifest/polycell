@@ -285,7 +285,7 @@
       "id": "shipping.cost",
       "service": "gateway",
       "protocol": "rest",
-      "title": "Koszt wysyłki wg starego cennika",
+      "title": "Shipping cost is a fixed rate, not a per-kilogram multiplication. For country PL: weight_kg <= 5 costs 9.99, otherwise 19.99. For EVERY other country: weight_kg <= 5 costs 29.99, otherwise 49.99.",
       "description": "urn:wm:cell:shop:shipping.cost:v1 (owner=python)",
       "readOnly": true,
       "roles": [
