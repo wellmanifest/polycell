@@ -16,6 +16,10 @@ from pathlib import Path
 
 import yaml
 
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from tools.polycell.guards import parse_guard
+
 URN = re.compile(r"^urn:wm:cell:(?P<ns>[a-z0-9_-]+):(?P<name>[a-z0-9_.]+):v(?P<major>[0-9]+)$")
 LANGS = {"python": "py", "ts": "ts", "rust": "rs"}
 SCALARS = {"string", "int32", "int64", "double", "bool", "json"}
@@ -106,6 +110,11 @@ def run(root: Path) -> list[dict]:
         if proc.get("schema") != "poa.process/v1" or not str(proc.get("process_ref", "")).startswith("poa://"):
             add("PC006", "error", f"{p.name}: schema must be poa.process/v1 and process_ref poa://...")
         for s in proc.get("steps", []):
+            if "guard" in s:
+                try:
+                    parse_guard(s["guard"])
+                except ValueError as error:
+                    add("PC006", "error", f"{p.name}: invalid guard at {s['id']}: {error}")
             if s["capability_ref"] not in contracts:
                 add("PC006", "error", f"{p.name}: step {s['id']} references unknown capability {s['capability_ref']}")
             for d in s.get("depends_on", []):
