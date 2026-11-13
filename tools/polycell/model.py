@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import keyword
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,16 @@ ROOT = Path(__file__).resolve().parents[2]
 SCALARS = {"string", "int32", "int64", "double", "bool", "json"}
 LANG_EXT = {"python": "py", "ts": "ts", "rust": "rs"}
 URN_RE = re.compile(r"^urn:wm:cell:(?P<ns>[a-z0-9_-]+):(?P<name>[a-z0-9_.]+):v(?P<major>[0-9]+)$")
+RUST_KEYWORDS = set("""as break const continue crate else enum extern false fn for if impl in let
+loop match mod move mut pub ref return self Self static struct super trait true type unsafe
+use where while async await dyn abstract become box do final gen macro override priv try
+typeof unsized virtual yield""".split())
+
+
+def portable_identifier(name: str) -> None:
+    # Every contract emits Python and Rust types, regardless of its cell owner.
+    if not name.isidentifier() or keyword.iskeyword(name) or name in RUST_KEYWORDS:
+        raise ValueError(f"not a portable identifier: {name}")
 
 
 @dataclass
@@ -93,16 +104,21 @@ def validate_contract_set(contracts: list[dict]) -> None:
             raise ValueError("contract name does not match URN")
         symbols = {"urn": raw["urn"], "name": raw["name"], "filename": raw["name"].replace(".", "_"),
                    "type": "".join(p[:1].upper() + p[1:] for p in re.split(r"[._]", raw["name"]))}
+        portable_identifier(symbols["filename"])
+        portable_identifier(symbols["type"])
         for key, symbol in symbols.items():
             if symbol in seen[key]:
                 raise ValueError(f"duplicate {key}: {symbol}; parallel majors with the same name are not supported yet")
             seen[key].add(symbol)
         known = SCALARS | set(raw.get("types", {}))
         for fields in (raw["input"], raw["output"], *raw.get("types", {}).values()):
+            for field_name in fields:
+                portable_identifier(field_name)
             for value in fields.values():
                 if TypeRef.parse(value).base not in known:
                     raise ValueError(f"{raw['urn']}: unknown local type {value}")
         for name, fields in raw.get("types", {}).items():
+            portable_identifier(name)
             if name in types and types[name] != fields:
                 raise ValueError(f"conflicting shared type: {name}")
             types[name] = fields

@@ -31,6 +31,21 @@ class ValidationTests(unittest.TestCase):
         self.assertTrue(core.validate(True, {"type": "integer"}))
         self.assertTrue(core.validate(False, {"type": "number"}))
 
+    def test_numeric_bounds_are_checked_in_nested_arrays(self):
+        schema = {'type': 'array', 'items': {'type': 'integer', 'minimum': -(2**31), 'maximum': 2**31-1}}
+        self.assertEqual([], core.validate([-(2**31), 0, 2**31-1], schema))
+        for value in (-(2**31)-1, 2**31):
+            with self.subTest(value=value):
+                errors = core.validate([value], schema)
+                self.assertTrue(errors)
+                self.assertIn('$[0]', errors[0])
+
+    def test_nonfinite_numbers_are_rejected(self):
+        for value in (float('nan'), float('inf'), -float('inf')):
+            with self.subTest(value=value):
+                self.assertTrue(core.validate(value, {'type': 'number'}))
+        self.assertEqual([], core.validate(1.5, {'type': 'number'}))
+
     def test_unknown_fields_are_rejected(self):
         self.assertTrue(core.validate({"weight_kg": 2, "country": "PL", "extra": 1}, core._schema("shipping.cost", "input")))
 

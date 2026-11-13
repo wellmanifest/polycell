@@ -1,0 +1,32 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-005",
+  "summary": "Enforce portable generated field types and numeric bounds",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-005/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "gateway/core.py",
+    "gen/jsonschema/**",
+    "gen/mcp-tools.json",
+    "gen/python/polycell_types.py",
+    "gen/ts/types.ts",
+    "tests/test_gateway.py",
+    "tests/test_generation.py",
+    "tools/polycell/gen.py",
+    "tools/polycell/model.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null
+}

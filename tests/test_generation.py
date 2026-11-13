@@ -4,12 +4,14 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import typing
 import unittest
 
 import yaml
 
 from tools.polycell import package
 from tools.polycell.model import load_cells
+from jsonschema import Draft202012Validator, ValidationError
 
 
 class GenerationTests(unittest.TestCase):
@@ -97,6 +99,59 @@ class GenerationTests(unittest.TestCase):
         self.assertIn(':golden', first['name'])
         self.assertIn('CLICK [data-testid=run]', scenario)
         self.assertIn(json.dumps(str(first['input']['weight_kg'])), scenario)
+
+    def test_nonportable_names_fail_before_writing_artifacts(self):
+        path = self.app / 'contracts/cells/shipping.cost.cell.yaml'
+        original = yaml.safe_load(path.read_text())
+        before = self.artifacts()
+        for field in ('class', 'return', 'type', 'self', 'match'):
+            with self.subTest(field=field):
+                contract = {**original, 'input': {field: 'string'}}
+                path.write_text(yaml.safe_dump(contract))
+                result = self.generate(check=False)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn('portable identifier', result.stderr)
+                self.assertEqual(before, self.artifacts())
+        contract = {**original, 'name': '123.test', 'urn': 'urn:wm:cell:shop:123.test:v1'}
+        path.write_text(yaml.safe_dump(contract))
+        self.assertNotEqual(0, self.generate(check=False).returncode)
+        self.assertEqual(before, self.artifacts())
+
+    def test_optional_types_match_omission_only_schema(self):
+        path = self.app / 'contracts/cells/shipping.cost.cell.yaml'
+        contract = yaml.safe_load(path.read_text())
+        contract['input']['discount'] = 'double?'
+        path.write_text(yaml.safe_dump(contract))
+        self.generate()
+        schema = json.loads((self.app / 'gen/jsonschema/shipping.cost.input.json').read_text())
+        validator = Draft202012Validator(schema)
+        valid = {'country': 'PL', 'weight_kg': 1}
+        validator.validate(valid)
+        validator.validate({**valid, 'discount': 0.5})
+        with self.assertRaises(ValidationError):
+            validator.validate({**valid, 'discount': None})
+        namespace = {'__name__': 'generated_types'}
+        source = (self.app / 'gen/python/polycell_types.py').read_text()
+        exec(compile(source, 'polycell_types.py', 'exec'), namespace)
+        hints = typing.get_type_hints(namespace['ShippingCostInput'], globalns=namespace, include_extras=True)
+        self.assertEqual((float,), typing.get_args(hints['discount']))
+        ts = (self.app / 'gen/ts/types.ts').read_text()
+        self.assertIn('discount?: number;', ts)
+
+    def test_generated_integer_schemas_enforce_wire_ranges(self):
+        path = self.app / 'contracts/cells/shipping.cost.cell.yaml'
+        contract = yaml.safe_load(path.read_text())
+        contract['input'] = {'value': 'int32', 'values': 'int64[]'}
+        path.write_text(yaml.safe_dump(contract))
+        self.generate()
+        schema = json.loads((self.app / 'gen/jsonschema/shipping.cost.input.json').read_text())
+        validator = Draft202012Validator(schema)
+        for value in (-(2**31), 2**31 - 1):
+            validator.validate({'value': value, 'values': [-(2**63), 2**63 - 1]})
+        for data in ({'value': 2**31, 'values': []}, {'value': -(2**31)-1, 'values': []},
+                     {'value': 0, 'values': [2**63]}, {'value': 0, 'values': [-(2**63)-1]}):
+            with self.subTest(data=data), self.assertRaises(ValidationError):
+                validator.validate(data)
 
 
 if __name__ == '__main__':

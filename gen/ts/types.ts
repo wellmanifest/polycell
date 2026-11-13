@@ -39,7 +39,7 @@ export interface NotifyRenderOutput {
 export interface PricingQuoteInput {
   items: LineItem[];
   currency: string;
-  coupon?: string | null;
+  coupon?: string;
 }
 
 /** urn:wm:cell:shop:pricing.quote:v1 */
