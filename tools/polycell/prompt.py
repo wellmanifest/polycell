@@ -18,7 +18,9 @@ RULES = {
     "python": """- Python 3.12, tylko biblioteka standardowa.
 - Pierwsza linia DOKŁADNIE: `# polycell: urn={urn} contract={h}`
 - Import typów: `from polycell_types import {P}Input, {P}Output`
-- Eksportuj `def run(input: {P}Input) -> {P}Output:`; wejście/wyjście to zwykłe dict-y.""",
+- Eksportuj `def run(input: {P}Input) -> {P}Output:`; wejście/wyjście to zwykłe dict-y.
+- TypedDict opisuje typ słownika. Odczytuj pola przez `input["pole"]`, nigdy `input.pole`.
+- Zwracaj literał słownika zgodny z wyjściem kontraktu. Plik ma definiować zwykłą funkcję run, nie obiekt JSON ani lambda.""",
     "ts": """- TypeScript uruchamiany przez Node 22 z usuwaniem typów: tylko składnia usuwalna (bez enum, namespace, parameter properties).
 - Pierwsza linia DOKŁADNIE: `// polycell: urn={urn} contract={h}`
 - `import type {{ {P}Input, {P}Output }} from "../../gen/ts/types.ts";`

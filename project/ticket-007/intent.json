@@ -1,0 +1,27 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-007",
+  "summary": "Regenerate cells from actionable qualification feedback",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P2",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-007/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "tests/test_forge.py",
+    "tools/polycell/forge.py",
+    "tools/polycell/package_worker.py",
+    "tools/polycell/prompt.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null
+}
