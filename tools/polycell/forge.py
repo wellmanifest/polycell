@@ -16,7 +16,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from tools.polycell.package import replace, verify
+from tools.polycell.package import check_oracle, digest, new_directory, qualify, replace, snapshot, verify
 
 HARNESS = "# Polycell adapter envelope; preserve exactly.\n"
 KERNEL = "fn main() {}\n"
@@ -32,8 +32,11 @@ def request(package: Path, objective: str) -> dict:
         "The JSON envelope required by the system replaces the Markdown output-format instruction in the cell prompt. "
         "Preserve the exact first-line header and all example/golden behavior. "
         "Use a short, straightforward implementation. "
+        "Each files value must be a string containing source code, not a JSON object or lambda. "
         f"Exact JSON control values: harness_py = {json.dumps(HARNESS)}; kernel_rs = {json.dumps(KERNEL)}. "
-        "Preserve their terminal newline characters.\nObjective: " + objective + "\n\n" + (package / "prompt.md").read_text()
+        "Preserve their terminal newline characters.\n\n" + (package / "prompt.md").read_text()
+        + "\nAcceptance cases (input -> expected output):\n" + (package / "cases.json").read_text()
+        + "\nRegeneration objective and latest qualification feedback:\n" + objective
     )
     return {"prompt": prompt, "baseline": {"harness.py": HARNESS, "kernel.rs": KERNEL}}
 
@@ -115,6 +118,71 @@ def propose(package: Path, out: Path, audit: Path, model: str, base_url: str,
     return {"package": str(out), "metrics": answer["metrics"], "qualification": "required"}
 
 
+def regenerate(package: Path, out: Path, audit: Path, model: str, base_url: str,
+               objective: str, oracle: Path, image: str, attempts: int = 3,
+               timeout: float = 180, reasoning_effort: str | None = None) -> dict:
+    """Regenerate whole files using bounded feedback; publish only qualified code."""
+    if type(attempts) is not int or not 1 <= attempts <= 3:
+        raise ValueError("attempts must be between 1 and 3")
+    package, oracle, out, audit = (p.absolute() for p in (package, oracle, out, audit))
+    if os.path.lexists(out) or os.path.lexists(audit):
+        raise ValueError("proposal and audit destinations must be new")
+    for target in (out.resolve(), audit.resolve()):
+        for source in (package.resolve(), oracle.resolve()):
+            if target.is_relative_to(source) or source.is_relative_to(target):
+                raise ValueError("output and audit must be outside the source packages")
+    if out.resolve().is_relative_to(audit.resolve()) or audit.resolve().is_relative_to(out.resolve()):
+        raise ValueError("output and audit destinations must be disjoint")
+    check_oracle(package, oracle)
+    audit.mkdir(parents=True, mode=0o700)
+    baseline, trusted = audit / "baseline", audit / "oracle"
+    snapshot(package, baseline)
+    snapshot(oracle, trusted)
+    report = {"schema": "wellmanifest.polycell.regeneration/v1", "ok": False, "attempts": []}
+
+    def record():
+        staged = audit / "report.tmp"
+        staged.write_text(json.dumps(report, indent=2) + "\n")
+        staged.replace(audit / "report.json")
+
+    feedback = ""
+    for number in range(1, attempts + 1):
+        directory = audit / f"attempt-{number:03}"
+        directory.mkdir()
+        candidate = directory / "candidate"
+        entry = {"number": number, "candidate": str(candidate), "stage": "proposal"}
+        report["attempts"].append(entry)
+        record()
+        try:
+            propose(baseline, candidate, directory / "provider", model, base_url,
+                    objective + feedback, timeout, reasoning_effort)
+        except (ValueError, RuntimeError, OSError) as error:
+            entry["error"] = str(error)[-4000:]
+            record()
+            raise ValueError(f"generation failed; see {audit / 'report.json'}") from error
+        entry["stage"] = "qualification"
+        record()
+        try:
+            receipt = qualify(candidate, trusted, image)
+        except ValueError as error:
+            entry["error"] = str(error)[-4000:]
+            record()
+            feedback = ("\nThe previous complete implementation failed independent qualification. "
+                        "Regenerate the ENTIRE file and preserve the unchanged contract and all cases. "
+                        "Diagnostic:\n" + entry["error"])
+            continue
+        # Bind publication to exactly the candidate that the evaluator accepted.
+        with new_directory(out) as staged:
+            snapshot(candidate, staged)
+            if receipt["candidate_sha256"] != digest((staged / "package.json").read_bytes()):
+                raise ValueError("candidate changed after qualification")
+        entry.update(stage="accepted", qualification=receipt)
+        report["ok"] = True
+        record()
+        return {"package": str(out), "qualification": receipt, "attempts": number, "audit": str(audit)}
+    raise ValueError(f"no qualified candidate after {attempts} attempts; see {audit / 'report.json'}")
+
+
 def replay(package: Path, out: Path, audit: Path) -> dict:
     """Explicitly re-evaluate one archived native response; never count a new call."""
     from forge_base.providers import validate_bundle
@@ -156,14 +224,26 @@ def main():
     parser.add_argument("--objective", default="Regenerate the complete function from its contract and examples.")
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--reasoning-effort", choices=["none", "low", "medium", "high"])
+    parser.add_argument("--oracle", type=Path, help="Trusted package enabling qualification and bounded regeneration")
+    parser.add_argument("--image", help="Qualification worker image (required with --oracle)")
+    parser.add_argument("--attempts", type=int, default=3, help="Maximum whole-file proposals with --oracle (1..3)")
     args = parser.parse_args()
     if args.replay_audit:
+        if args.oracle or args.image:
+            parser.error("replay is separate from qualified regeneration")
         if args.audit or args.model:
             parser.error("replay is separate from a new model/audit request")
         print(json.dumps(replay(args.package, args.out, args.replay_audit), indent=2))
         return
     if not args.audit or not args.model:
         parser.error("new inference requires --audit and --model")
+    if bool(args.oracle) != bool(args.image):
+        parser.error("--oracle and --image must be provided together")
+    if args.oracle:
+        result = regenerate(args.package, args.out, args.audit, args.model, args.base_url,
+                            args.objective, args.oracle, args.image, args.attempts, args.timeout, args.reasoning_effort)
+        print(json.dumps(result, indent=2))
+        return
     print(json.dumps(propose(args.package, args.out, args.audit, args.model, args.base_url, args.objective, args.timeout, args.reasoning_effort), indent=2))
 
 
