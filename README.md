@@ -132,7 +132,8 @@ standard/                          conformance.py + schema - propozycja wellmani
 tools/polycell/                    gen, prompt, new_cell, adopt (inventory/wrap/golden/switch/prune)
 adoption/forge-candidates.md       analiza Twojego map.toon.yaml (forge)
 docs/SPEC.md, docs/PROMPTS.md      specyfikacja i prompty do istniejących projektów
-AGENTS.md                          reguły dla agentów AI
+AGENTS.md                          kontrakt governance dla agentów AI (new-project)
+project/polycell-agent-rules.md    reguły pracy z komórkami i kontraktami polycell
 ```
 
 ## Integracja z ekosystemem wellmanifest / semcod / autogrammar

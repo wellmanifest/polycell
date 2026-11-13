@@ -1,0 +1,52 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-001",
+  "summary": "Adopt wellmanifest/new-project 0.20.147 governance so tickets, canonical worktrees and independent publication apply to polycell",
+  "workstream": "governance",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "project/ticket-001/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    ".governance/**",
+    ".aider.conf.yml",
+    ".cursor/rules/**",
+    ".gitattributes",
+    ".githooks/**",
+    ".github/copilot-instructions.md",
+    ".github/workflows/new-project-branch-hygiene.yml",
+    ".github/workflows/new-project-governance.yml",
+    ".gitignore",
+    ".subactor/.gitignore",
+    ".subactor/manifest.json",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "CHANGELOG.md",
+    "VERSION",
+    "README.md",
+    "project.sh",
+    "project.bat",
+    "project/governance-check.sh",
+    "project/governance-check.bat",
+    "project/new-ticket.sh",
+    "project/readme.sh",
+    "project/polycell-agent-rules.md",
+    "scripts/install-agent-hosts.sh",
+    "scripts/runtime.sh",
+    "wellmanifest_governance.py",
+    "worktree-guard.yaml",
+    "compose.yml"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null
+}
