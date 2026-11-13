@@ -7,6 +7,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from jsonschema import Draft202012Validator
+from tools.polycell.comparison import outputs_equal
 from tools.polycell.package import assemble, check_oracle
 
 
@@ -56,13 +57,10 @@ def main():
     replies = [json.loads(line) for line in raw.splitlines()]
     if len(replies) != len(cases):
         raise ValueError("unexpected number of candidate replies")
-    # Use the same tolerant numeric comparator as the gateway's transport parity.
-    sys.path.insert(0, str(work))
-    os.environ["POLYCELL_ROOT"] = str(work)
-    from gateway.core import _eq
+    # Use the mounted trusted harness's comparator, not the cached runtime image.
     output_validator = Draft202012Validator(json.loads((oracle / "output.schema.json").read_text()))
     for case, reply in zip(cases, replies):
-        validate_reply(case, reply, meta, output_validator, _eq)
+        validate_reply(case, reply, meta, output_validator, outputs_equal)
     print(json.dumps({"schema": "wellmanifest.polycell.qualification/v1", "ok": True, "urn": meta["urn"],
                       "owner": meta["owner"], "cases": len(cases), "transport": "stdio", "network": "none",
                       "build_s": round(build_s, 3), "elapsed_s": round(time.monotonic() - start, 3)}))

@@ -12,6 +12,7 @@ import uuid
 from copy import deepcopy
 from pathlib import Path
 
+from tools.polycell.comparison import outputs_equal as _eq
 from tools.polycell.guards import guard_matches, parse_guard
 
 from . import transport
@@ -257,16 +258,6 @@ def parity(transports=transport.TRANSPORTS) -> dict:
             row[f"{tr}_rtt_ms"] = r.get("rtt_ms")
         rows.append(row)
     return {"all_ok": all(row[t] == "ok" for row in rows for t in transports), "rows": rows}
-
-
-def _eq(a, b) -> bool:
-    if isinstance(a, float) or isinstance(b, float):
-        return isinstance(a, (int, float)) and isinstance(b, (int, float)) and abs(a - b) < 1e-9
-    if isinstance(a, dict) and isinstance(b, dict):
-        return a.keys() == b.keys() and all(_eq(a[k], b[k]) for k in a)
-    if isinstance(a, list) and isinstance(b, list):
-        return len(a) == len(b) and all(_eq(x, y) for x, y in zip(a, b))
-    return a == b
 
 
 # ------------------------------------------------------------- logi (ring buffer + docker socket)
