@@ -4,7 +4,9 @@ PY    ?= $(if $(wildcard .venv/bin/python),$(CURDIR)/.venv/bin/python,python3)
 NODE  ?= node --experimental-strip-types --no-warnings
 RUN   := .run
 DB_URL ?= postgresql://postgres:postgres@127.0.0.1:55432/postgres?sslmode=disable
-CDP_URL ?= http://127.0.0.1:9222
+CHROME_PORT ?= 9222
+CHROME_STARTUP_TIMEOUT ?= 60
+CDP_URL ?= http://127.0.0.1:$(CHROME_PORT)
 APP_URL ?= http://127.0.0.1:8080
 CELL ?=
 FORGE_ROOT ?= $(abspath ../../heyasa/forge)
@@ -77,10 +79,23 @@ testql: ## scenariusze TestTOON (tests/generated) - testql jeśli zainstalowany,
 	@if command -v testql >/dev/null; then testql run tests/generated/smoke.testql.toon.yaml --url $(APP_URL); fi
 	$(PY) twin/testql_runner.py tests/generated/*.testql.toon.yaml --url $(APP_URL)
 
-chrome: ## lokalny Chrome headless z CDP :9222
-	@mkdir -p $(RUN)/logs
-	google-chrome --headless=new --no-sandbox --disable-gpu --user-data-dir=$(CURDIR)/$(RUN)/chrome --remote-debugging-port=9222 --remote-allow-origins=* about:blank > $(RUN)/logs/chrome.log 2>&1 < /dev/null & echo $$! > $(RUN)/chrome.pid
-	@curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 $(CDP_URL)/json/version > /dev/null
+# Relative TMPDIR keeps Unix socket names short inside deep worktree paths.
+chrome: ## lokalny Chrome headless (CHROME_PORT=9222, CHROME_STARTUP_TIMEOUT=60)
+	@mkdir -p $(RUN)/logs .subactor/cache/chrome-tmp
+	TMPDIR=.subactor/cache/chrome-tmp google-chrome --headless=new --no-sandbox --disable-gpu --user-data-dir=$(CURDIR)/$(RUN)/chrome --remote-debugging-port=$(CHROME_PORT) --remote-allow-origins=* about:blank > $(RUN)/logs/chrome.log 2>&1 < /dev/null & echo $$! > $(RUN)/chrome.pid
+	@pid=$$(cat $(RUN)/chrome.pid); deadline=$$((SECONDS + $(CHROME_STARTUP_TIMEOUT))); \
+	while :; do \
+		if ! kill -0 $$pid 2>/dev/null; then \
+			echo "Chrome exited before CDP became ready" >&2; \
+			tail -n 20 $(RUN)/logs/chrome.log >&2; exit 1; \
+		fi; \
+		if curl --fail --silent --connect-timeout 1 --max-time 2 $(CDP_URL)/json/version > /dev/null; then break; fi; \
+		if (( SECONDS >= deadline )); then \
+			echo "Chrome CDP startup timed out after $(CHROME_STARTUP_TIMEOUT) seconds: $(CDP_URL)" >&2; \
+			tail -n 20 $(RUN)/logs/chrome.log >&2; exit 1; \
+		fi; \
+		sleep 1; \
+	done
 
 cdp: ## scenariusze UI przez Chrome DevTools Protocol -> artifacts/twin (zrzuty, konsola, sieć)
 	CDP_URL=$(CDP_URL) APP_URL=$(APP_URL) $(NODE) twin/cdp.ts
