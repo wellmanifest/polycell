@@ -22,7 +22,7 @@ from jsonschema import Draft202012Validator
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from standard.conformance import HEADER, IMPURE, interface_hash
-from tools.polycell.model import TypeRef, URN_RE
+from tools.polycell.model import TypeRef, URN_RE, validate_contract_set
 
 EXT = {"python": "py", "ts": "ts", "rust": "rs"}
 ARTIFACTS = {"contract.cell.yaml", "cases.json", "types.txt", "prompt.md", "input.schema.json", "output.schema.json"}
@@ -265,41 +265,30 @@ def assemble(packages: list[Path], out: Path, runtime: Path = ROOT, warm: bool =
 
 def _assemble_into(packages: list[Path], out: Path, runtime: Path, warm: bool, record_git: bool) -> dict:
     manifests = [verify(p) for p in packages]
-    for key in ("urn", "name"):
-        if len({m[key] for m in manifests}) != len(manifests):
-            raise ValueError(f"duplicate {key}; parallel majors with the same name are not supported yet")
-    stems = [m["name"].replace(".", "_") for m in manifests]
-    if len(set(stems)) != len(stems):
-        raise ValueError("implementation filename collision")
-    types = {}
-    symbols = set()
-    for package, manifest in zip(packages, manifests):
-        pascal = "".join(part[:1].upper() + part[1:] for part in manifest["name"].replace(".", "_").split("_"))
-        for kind in ("Input", "Output"):
-            symbol = pascal + kind
-            if symbol in symbols:
-                raise ValueError(f"generated type collision: {symbol}")
-            symbols.add(symbol)
-        for name, fields in yaml.safe_load((package / "contract.cell.yaml").read_text()).get("types", {}).items():
-            if name in types and types[name] != fields:
-                raise ValueError(f"conflicting shared type: {name}")
-            types[name] = fields
-    if symbols & types.keys():
-        raise ValueError("shared type collides with generated input/output type")
+    validate_contract_set([yaml.safe_load((p / "contract.cell.yaml").read_text()) for p in packages])
     if out.exists():
         raise ValueError("assembly destination must be new")
     out.mkdir(parents=True)
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "node_modules", "target")
+    def runtime_ignore(directory, names):
+        omitted = set(ignore(directory, names))
+        if Path(directory) == runtime / "twin":
+            omitted.add("scenarios")  # Demo-specific checkout; app scenarios are generated from its cells.
+        return omitted
     for name in RUNTIME_DIRS:
         if (runtime / name).exists():
-            shutil.copytree(runtime / name, out / name, ignore=ignore)
+            shutil.copytree(runtime / name, out / name, ignore=runtime_ignore)
     for name in ("Makefile", "requirements.txt", ".gitignore", ".dockerignore", ".nvmrc", "compose.yml", "AGENTS.md"):
         if (runtime / name).exists():
             shutil.copy2(runtime / name, out / name)
     for part in ("contracts/cells", "contracts/processes", "tests/golden", "cells/python", "cells/ts", "cells/rust"):
         (out / part).mkdir(parents=True)
-    for path in (runtime / "tests").glob("*.py"):
-        shutil.copyfile(path, out / "tests" / path.name)
+    # Framework regressions depend on the demo's fixtures. Applications receive
+    # the portable contract tests and benchmark, while integration lives in tools/.
+    for name in ("test_application.py", "bench.py"):
+        path = runtime / "tests" / name
+        if path.exists():
+            shutil.copyfile(path, out / "tests" / name)
     lock = {"schema": "wellmanifest.polycell.cellset/v1", "packages": [], "processes": []}
     for package, manifest in zip(packages, manifests):
         name, owner = manifest["name"], manifest["owner"]

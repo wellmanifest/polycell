@@ -128,6 +128,9 @@ make check
 make dev TS_HTTP_PORT=18102
 make parity TS_HTTP_PORT=18102
 make testql
+make test
+make integration
+make chrome cdp
 ```
 
 Assembly tworzy nowy katalog; nie nadpisuje działającej aplikacji. Kopiuje współdzielony
@@ -141,6 +144,17 @@ i hashe procesów. Zmiana jednej funkcji oznacza nowy commit paczki oraz aktuali
 tej zależności w aplikacji, po pełnym odbiorze. Rollback aplikacji oznacza odtworzenie
 poprzedniego zestawu zależności; nie ma globalnego atomowego commita wielu repozytoriów.
 
+Aplikacja otrzymuje trzy przenośne kontrole kontraktów, schematów i przypadków testowych.
+Regresje narzędzi oraz scenariusz checkout pozostają w repo demo, ponieważ wymagają jego
+konkretnych funkcji. `make integration` i `make mcp-test` odczytują rzeczywisty rejestr
+oraz przykłady komórek/procesów. Działają również przy jednej komórce i braku procesów.
+Zachowanie funkcji sprawdzają `make parity` i integracja, nie same kontrole strukturalne.
+
+`make gen` tworzy `tests/generated/*.cdp.tql` na podstawie pierwszego przykładu lub golden
+każdej komórki. `make cdp` wykrywa te pliki oraz własne scenariusze w `twin/scenarios`.
+Przy usunięciu komórki lub procesu generator usuwa jego stare schematy i scenariusze
+ze swoich katalogów wyjściowych. Kolizje nazw, plików i typów wykrywa przed zapisem.
+
 Reguła niekompatybilnej zmiany pozostaje taka sama: nowy kontrakt i nowy major URN,
 stary zostaje. Obecny generator Polycell nie obsługuje jednak dwóch majorów o tej samej
 nazwie; assembly jawnie odrzuca taką kolizję. To ograniczenie do usunięcia przed
@@ -153,6 +167,8 @@ osobnego repozytorium GitHub dla każdej komórki; istnieją lokalne repozytoria
 make package-test OUT=.run/package-acceptance
 # Z wygenerowanym kandydatem shipping.cost:
 make package-test OUT=.run/package-acceptance-llm CANDIDATE=.run/shipping-candidate
+# W repo demo, test natywny samodzielnej kompozycji (zatrzymuje make dev tego repo):
+make composition-test OUT=.run/composition-acceptance
 ```
 
 Test eksportuje cztery komórki, tworzy i klonuje prawdziwe `git bundle`, kwalifikuje

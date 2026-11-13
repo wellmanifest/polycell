@@ -41,6 +41,12 @@ Koszt zmiany kodu generowanego przez AI jest zdominowany przez refaktoryzację w
 - **R8** Procesy MUSZĄ zawierać wyłącznie URN-y capability, nigdy adresy transportowe; plan zawiera `plan_hash`, wynik `poa.receipt/v1`.
 - **R9** Kod legacy zastępowany przez komórkę MUSI być wymieniony w `replaces` i usunięty dopiero po zielonym parity na przypadkach golden.
 
+Generator wymaga, aby kontrakt deklarował w `types` wszystkie używane typy złożone,
+także te zagnieżdżone. Wspólne nazwy typów muszą mieć identyczne definicje. Przed
+zapisem artefaktów sprawdzane są również kolizje nazw komórek, plików i typów
+wejścia/wyjścia. Obecne ograniczenie współistnienia majorów opisuje
+[instrukcja harnessu](FORGE-HARNESS.md#składanie-aplikacji-i-wersjonowanie).
+
 ## 4. Kody zgodności (`standard/conformance.py`)
 
 | Kod | Znaczenie |

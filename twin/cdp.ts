@@ -6,7 +6,7 @@
 // Składnia scenariusza (podzbiór zgodny w duchu z GUI_* z autogrammar/testql):
 //   GOTO /path | WAIT <css> | CLICK <css> | TYPE <css> "tekst" | PRESS Enter | SELECT <css> "wartość"
 //   WAIT_TEXT <css> "fragment" | ASSERT_TEXT <css> "fragment" | SCREENSHOT name.png | CONSOLE_ERRORS <max> | SLEEP ms
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import { lookup } from "node:dns/promises";
@@ -115,7 +115,10 @@ async function runScenario(file: string) {
   return { scenario: file, ok, steps, consoleErrors: page.consoleErrors, networkErrors: page.networkErrors, domText: dom };
 }
 
-const files = process.argv.slice(2);
+const files = process.argv.length > 2 ? process.argv.slice(2) :
+  ["tests/generated", "twin/scenarios"].flatMap(dir => existsSync(dir)
+    ? readdirSync(dir).filter(name => name.endsWith(".cdp.tql")).sort().map(name => join(dir, name)) : []);
+if (!files.length) throw new Error("No CDP scenarios found; run make gen first");
 const results = [];
 for (const f of files) results.push(await runScenario(f));
 const report = { ok: results.every((r) => r.ok), cdp: CDP, app: APP, results };

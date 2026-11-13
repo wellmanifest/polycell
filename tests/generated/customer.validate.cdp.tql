@@ -1,0 +1,14 @@
+# GENERATED: UI invocation of urn:wm:cell:shop:customer.validate:v1
+GOTO /
+WAIT [data-testid="menu-customer.validate"]
+CLICK [data-testid="menu-customer.validate"]
+WAIT [data-testid=run]
+TYPE [data-testid=in-name] "Jan Kowalski"
+TYPE [data-testid=in-email] "  Jan.Kowalski@Example.COM "
+TYPE [data-testid=in-country] "pl"
+SELECT [data-testid=transport] "http"
+CLICK [data-testid=run]
+WAIT_TEXT [data-testid=result] "\"urn\": \"urn:wm:cell:shop:customer.validate:v1\""
+WAIT_TEXT [data-testid=result] "\"ok\": true"
+SCREENSHOT customer.validate.png
+CONSOLE_ERRORS 0

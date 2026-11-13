@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[2]
 SCALARS = {"string", "int32", "int64", "double", "bool", "json"}
@@ -47,6 +48,7 @@ class Cell:
     input: dict[str, TypeRef]
     output: dict[str, TypeRef]
     types: dict[str, dict[str, TypeRef]] = field(default_factory=dict)
+    root: Path = ROOT
 
     @property
     def ns(self) -> str:
@@ -66,7 +68,7 @@ class Cell:
 
     @property
     def cell_path(self) -> Path:
-        return ROOT / "cells" / self.owner / f"{self.snake}.{LANG_EXT[self.owner]}"
+        return self.root / "cells" / self.owner / f"{self.snake}.{LANG_EXT[self.owner]}"
 
     @property
     def interface_hash(self) -> str:
@@ -80,14 +82,46 @@ def _fields(d: dict | None) -> dict[str, TypeRef]:
     return {k: TypeRef.parse(v) for k, v in (d or {}).items()}
 
 
+def validate_contract_set(contracts: list[dict]) -> None:
+    """Reject ambiguous symbols before generation can overwrite existing artifacts."""
+    validator = Draft202012Validator(json.loads((ROOT / "standard/polycell-cell.schema.v1.json").read_text()))
+    seen = {key: set() for key in ("urn", "name", "filename", "type")}
+    types = {}
+    for raw in contracts:
+        validator.validate(raw)
+        if URN_RE.fullmatch(raw["urn"])["name"] != raw["name"]:
+            raise ValueError("contract name does not match URN")
+        symbols = {"urn": raw["urn"], "name": raw["name"], "filename": raw["name"].replace(".", "_"),
+                   "type": "".join(p[:1].upper() + p[1:] for p in re.split(r"[._]", raw["name"]))}
+        for key, symbol in symbols.items():
+            if symbol in seen[key]:
+                raise ValueError(f"duplicate {key}: {symbol}; parallel majors with the same name are not supported yet")
+            seen[key].add(symbol)
+        known = SCALARS | set(raw.get("types", {}))
+        for fields in (raw["input"], raw["output"], *raw.get("types", {}).values()):
+            for value in fields.values():
+                if TypeRef.parse(value).base not in known:
+                    raise ValueError(f"{raw['urn']}: unknown local type {value}")
+        for name, fields in raw.get("types", {}).items():
+            if name in types and types[name] != fields:
+                raise ValueError(f"conflicting shared type: {name}")
+            types[name] = fields
+    generated = {name + kind for name in seen["type"] for kind in ("Input", "Output")}
+    if generated & types.keys():
+        raise ValueError("shared type collides with generated input/output type")
+
+
 def load_cells(root: Path = ROOT) -> list[Cell]:
     cells = []
-    for p in sorted((root / "contracts" / "cells").glob("*.cell.yaml")):
-        raw = yaml.safe_load(p.read_text(encoding="utf-8"))
+    parsed = [(p, yaml.safe_load(p.read_text(encoding="utf-8")))
+              for p in sorted((root / "contracts" / "cells").glob("*.cell.yaml"))]
+    validate_contract_set([raw for _, raw in parsed])
+    for p, raw in parsed:
         cells.append(Cell(
             path=p, raw=raw, urn=raw["urn"], name=raw["name"], owner=raw["owner"],
             input=_fields(raw.get("input")), output=_fields(raw.get("output")),
             types={t: _fields(f) for t, f in (raw.get("types") or {}).items()},
+            root=root,
         ))
     return cells
 

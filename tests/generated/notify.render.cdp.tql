@@ -1,0 +1,15 @@
+# GENERATED: UI invocation of urn:wm:cell:shop:notify.render:v1
+GOTO /
+WAIT [data-testid="menu-notify.render"]
+CLICK [data-testid="menu-notify.render"]
+WAIT [data-testid=run]
+TYPE [data-testid=in-customer_name] "Jan"
+TYPE [data-testid=in-total] "221.4"
+TYPE [data-testid=in-currency] "PLN"
+TYPE [data-testid=in-lang] "pl"
+SELECT [data-testid=transport] "http"
+CLICK [data-testid=run]
+WAIT_TEXT [data-testid=result] "\"urn\": \"urn:wm:cell:shop:notify.render:v1\""
+WAIT_TEXT [data-testid=result] "\"ok\": true"
+SCREENSHOT notify.render.png
+CONSOLE_ERRORS 0

@@ -334,6 +334,23 @@ def gen_tests(cells, processes) -> None:
                 cases.append({"urn": c.urn, "name": f"{c.name}:golden{i}", "owner": c.owner,
                               "input": g["input"], "output": g["output"]})
     write(ROOT / "tests" / "generated" / "cases.json", jdump(cases))
+    # Each assembled app gets browser coverage from its actual cases, including golden-only cells.
+    for c in cells:
+        example = next((case for case in cases if case["urn"] == c.urn), None)
+        if example is None:
+            continue
+        lines = [f"# GENERATED: UI invocation of {c.urn}", "GOTO /",
+                 f'WAIT [data-testid="menu-{c.name}"]', f'CLICK [data-testid="menu-{c.name}"]',
+                 "WAIT [data-testid=run]"]
+        for name, ref in c.input.items():
+            value = example["input"].get(name)
+            text = "" if name not in example["input"] else (value if ref.base == "string" and not ref.is_list else json.dumps(value, ensure_ascii=False))
+            lines.append(f'TYPE [data-testid=in-{name}] {json.dumps(text, ensure_ascii=False)}')
+        lines += ['SELECT [data-testid=transport] "http"', "CLICK [data-testid=run]",
+                  'WAIT_TEXT [data-testid=result] ' + json.dumps(f'"urn": "{c.urn}"'),
+                  'WAIT_TEXT [data-testid=result] ' + json.dumps('"ok": true'),
+                  f'SCREENSHOT {c.name}.png', 'CONSOLE_ERRORS 0']
+        write(ROOT / "tests/generated" / f"{c.name}.cdp.tql", "\n".join(lines) + "\n")
     # Scenariusze w formacie TestQL (TestTOON) - uruchamiane przez `testql` lub twin/scenario_runner.py
     for c in cells:
         lines = [f"# SCENARIO: {c.name} contract", "# TYPE: api", "# GENERATED: true", "",
@@ -403,6 +420,24 @@ def scaffold_and_lock(cells) -> None:
     write(ROOT / "contracts" / "polycell.lock.json", jdump(lock))
 
 
+def prune_generated(cells, processes) -> None:
+    """Remove only obsolete files in generator-owned output families."""
+    schemas = {f"{c.name}.{kind}.json" for c in cells for kind in ("input", "output")}
+    scenarios = {f"{c.name}.testql.toon.yaml" for c in cells} | {"smoke.testql.toon.yaml"}
+    cases = json.loads((ROOT / "tests/generated/cases.json").read_text())
+    covered = {case["urn"] for case in cases}
+    browser = {f"{c.name}.cdp.tql" for c in cells if c.urn in covered}
+    process_cases = {f"process.{p['process_ref'].split('/process/')[1].split('/')[0]}.cases.json" for p in processes}
+    for directory, pattern, keep in ((GEN / "jsonschema", "*.json", schemas),
+                                      (ROOT / "tests/generated", "*.testql.toon.yaml", scenarios),
+                                      (ROOT / "tests/generated", "*.cdp.tql", browser),
+                                      (ROOT / "tests/generated", "process.*.cases.json", process_cases)):
+        for path in directory.glob(pattern):
+            if path.name not in keep:
+                path.unlink()
+                print(f"  removed {path.relative_to(ROOT)}")
+
+
 def main() -> None:
     cells = load_cells()
     processes = load_processes()
@@ -418,6 +453,7 @@ def main() -> None:
     gen_openapi_mcp(cells)
     gen_tests(cells, processes)
     scaffold_and_lock(cells)
+    prune_generated(cells, processes)
 
 
 if __name__ == "__main__":

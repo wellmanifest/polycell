@@ -68,8 +68,8 @@ services:
     build: { context: ., dockerfile: docker/ts.Dockerfile }
     depends_on: [gateway, chrome]
     environment: { CDP_URL: "http://chrome:9222", APP_URL: "http://gateway:8080", ARTIFACTS: /app/artifacts/twin }
-    volumes: ["./artifacts:/app/artifacts", "./twin:/app/twin:ro"]
-    command: ["sh", "-c", "sleep 3 && node --experimental-strip-types twin/cdp.ts twin/scenarios/*.cdp.tql"]
+    volumes: ["./artifacts:/app/artifacts", "./twin:/app/twin:ro", "./tests:/app/tests:ro"]
+    command: ["sh", "-c", "sleep 3 && node --experimental-strip-types twin/cdp.ts"]
   testql:
     profiles: [twin]
     <<: *py

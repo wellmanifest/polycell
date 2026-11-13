@@ -69,8 +69,9 @@ parity: ## te same przypadki na HTTP, gRPC i stdio dla każdego języka
 test: ## regresje walidacji gatewaya i obsługi błędów HTTP
 	$(PY) -m unittest discover -s tests -p 'test_*.py' -v
 
-integration: ## checkout, zapis do DB, guard, walidacja, logi i MCP (wymaga dev)
-	APP_URL=$(APP_URL) $(PY) tests/integration.py
+integration: ## komórki/procesy bieżącej aplikacji, DB, logi i MCP (wymaga dev)
+	APP_URL=$(APP_URL) $(PY) -m tools.polycell.integration
+	@if [ -f tests/integration.py ]; then APP_URL=$(APP_URL) $(PY) tests/integration.py; fi
 
 testql: ## scenariusze TestTOON (tests/generated) - testql jeśli zainstalowany, inaczej wbudowany runner
 	@if command -v testql >/dev/null; then testql run tests/generated/smoke.testql.toon.yaml --url $(APP_URL); fi
@@ -82,15 +83,13 @@ chrome: ## lokalny Chrome headless z CDP :9222
 	@curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 $(CDP_URL)/json/version > /dev/null
 
 cdp: ## scenariusze UI przez Chrome DevTools Protocol -> artifacts/twin (zrzuty, konsola, sieć)
-	CDP_URL=$(CDP_URL) APP_URL=$(APP_URL) $(NODE) twin/cdp.ts twin/scenarios/*.cdp.tql
+	CDP_URL=$(CDP_URL) APP_URL=$(APP_URL) $(NODE) twin/cdp.ts
 
 bench: ## porównanie protokołów (N wywołań)
 	$(PY) tests/bench.py $(or $(N),300)
 
 mcp-test: ## test serwera MCP po stdio
-	printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize"}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
-	'{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"pricing_quote","arguments":{"items":[{"sku":"A","qty":1,"unit_price":10}],"currency":"PLN"}}}' \
-	| WM_GATEWAY_URL='$(APP_URL)' WM_DB='$(DB_URL)' $(PY) -m gateway.mcp
+	APP_URL=$(APP_URL) $(PY) -m tools.polycell.integration --mcp-only
 
 twin: dev chrome ## pełny sandbox natywnie: dev + chrome + parity + testql + cdp
 	@sleep 2; $(MAKE) parity testql cdp
@@ -129,6 +128,9 @@ package-check: ## odbiór w sandboxie: make package-check PACKAGE=... ORACLE=...
 package-test: ## eksport, git bundle, klonowanie, trzy języki, odrzucenie błędu, assembly
 	$(PY) tests/package_acceptance.py --out '$(OUT)' $(if $(CANDIDATE),--candidate '$(CANDIDATE)',)
 
+composition-test: check stop ## pełny test aplikacji z jedną komórką (w repo demo; OUT=nowy-katalog)
+	$(PY) tests/composition_acceptance.py --out '$(OUT)' --ts-http-port '$(TS_HTTP_PORT)'
+
 inventory: ## kandydaci na komórki z istniejącego kodu: make inventory SRC=../projekt lub MAP=map.toon.yaml
 	$(PY) tools/polycell/adopt.py inventory $(if $(MAP),--map $(MAP),) $(if $(SRC),--src $(SRC),)
 
@@ -147,4 +149,4 @@ prune: ## usuń zastąpiony kod legacy (raport; APPLY=1 usuwa): make prune CELL=
 clean: stop ## usuń wygenerowane i runtime
 	rm -rf gen $(RUN) artifacts tests/generated
 
-.PHONY: help install gen check stale prompt new-cell dev dev-sqlite stop parity test integration testql chrome cdp bench mcp-test twin diag up docker-twin logs down forge-install package-image package package-check package-test inventory wrap golden switch prune clean
+.PHONY: help install gen check stale prompt new-cell dev dev-sqlite stop parity test integration testql chrome cdp bench mcp-test twin diag up docker-twin logs down forge-install package-image package package-check package-test composition-test inventory wrap golden switch prune clean

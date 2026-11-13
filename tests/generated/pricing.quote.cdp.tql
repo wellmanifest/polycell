@@ -1,0 +1,14 @@
+# GENERATED: UI invocation of urn:wm:cell:shop:pricing.quote:v1
+GOTO /
+WAIT [data-testid="menu-pricing.quote"]
+CLICK [data-testid="menu-pricing.quote"]
+WAIT [data-testid=run]
+TYPE [data-testid=in-items] "[{\"sku\": \"A1\", \"qty\": 2, \"unit_price\": 50.0}, {\"sku\": \"B2\", \"qty\": 1, \"unit_price\": 100.0}]"
+TYPE [data-testid=in-currency] "PLN"
+TYPE [data-testid=in-coupon] "AI10"
+SELECT [data-testid=transport] "http"
+CLICK [data-testid=run]
+WAIT_TEXT [data-testid=result] "\"urn\": \"urn:wm:cell:shop:pricing.quote:v1\""
+WAIT_TEXT [data-testid=result] "\"ok\": true"
+SCREENSHOT pricing.quote.png
+CONSOLE_ERRORS 0

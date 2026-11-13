@@ -56,7 +56,7 @@ function field(name, t, value) {
   const complex = t.is_list || !["string","int32","int64","double","bool"].includes(t.base);
   const v = value === undefined ? "" : (complex ? JSON.stringify(value) : value);
   const tag = complex ? `<textarea rows="3" name="${name}" data-json="1" data-testid="in-${name}">${v}</textarea>`
-                      : `<input name="${name}" data-type="${t.base}" data-testid="in-${name}" value="${String(v).replaceAll('"','&quot;')}">`;
+                      : `<input name="${name}" data-type="${t.base}" data-optional="${t.optional}" data-testid="in-${name}" value="${String(v).replaceAll('"','&quot;')}">`;
   return `<label>${name} <small>${t.base}${t.is_list ? "[]" : ""}${t.optional ? "?" : ""}</small></label>${tag}`;
 }
 
@@ -82,7 +82,7 @@ function openProcess(name) {
 function collect() {
   const out = {};
   document.querySelectorAll("#form [name]").forEach(el => {
-    if (el.value === "") return;
+    if (el.value === "" && (el.dataset.type !== "string" || el.dataset.optional === "true")) return;
     let v = el.dataset.json ? JSON.parse(el.value) : el.value;
     if (el.dataset.type === "double" || el.dataset.type?.startsWith("int")) v = Number(v);
     if (el.dataset.type === "bool") v = v === "true";

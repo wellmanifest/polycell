@@ -29,6 +29,7 @@ jobs:
       - run: |
           curl --fail --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:9222/json/version
           make cdp
+      - run: make composition-test OUT=.run/composition-acceptance
       - if: failure()
         run: make diag
       - if: always()
@@ -38,5 +39,9 @@ jobs:
           path: |
             artifacts/twin
             .run/logs
+            .run/composition-acceptance/report.json
+            .run/composition-acceptance/test.log
+            .run/composition-acceptance/app/artifacts/twin
+            .run/composition-acceptance/app/.run/logs
       - if: always()
         run: make stop

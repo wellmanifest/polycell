@@ -5,6 +5,34 @@ niezawodnym, bezobsługowym generatorem aplikacji.** Najbardziej przewidywalne s
 pakowanie, odtwarzanie i odbiór. Jakość oraz czas modelu nadal wymagają pomiaru
 na właściwych zadaniach i jasnych kontraktach.
 
+## Samodzielne aplikacje i zmiana zestawu komórek
+
+Następny test z jedną komórką odtworzył pięć błędów `make test`: assembly kopiowało
+regresje sklepu, które wymagały nieobecnych funkcji. Aplikacja otrzymuje teraz
+przenośne kontrole swoich kontraktów; integracja i MCP korzystają z faktycznego
+rejestru. Generator tworzy również scenariusze CDP z przykładów lub golden.
+
+Usunięcie kontraktu pozostawiało stare schematy i scenariusze. Generator usuwa teraz
+nieaktualne pliki ze swoich rodzin wyjściowych oraz odrzuca kolizje nazw, ścieżek
+i typów przed pierwszym zapisem. Model komórki używa wskazanego katalogu aplikacji,
+zamiast zawsze wskazywać implementację w repo narzędzia.
+
+Walidacja lokalna: **47 regresji**, parytet **45 wywołań**, TestQL **5/5**, integracja
+oraz **72 kroki CDP w pięciu scenariuszach** bez błędów konsoli i sieci. Osobna aplikacja
+z jedną komórką i bez procesu checkout przeszła **30 wywołań**, TestQL **2/2**, integrację
+z zapisem do DB, MCP i **12 kroków CDP** w 74,20 s. Przypadek z pustym wymaganym tekstem
+wykrył i potwierdził poprawkę formularza: `""` nie znika już z wysyłanego obiektu.
+
+`make composition-test OUT=<nowy-katalog>` odtwarza ten test; uruchamia go również CI.
+Raport lokalny: `.run/composition-acceptance/report.json`. Czasy pochodzą z obciążonej
+maszyny i obejmują kompilację oraz uruchomienie usług.
+
+Powtórzona kwalifikacja czterech paczek Python/TS/Rust również przeszła, w tym
+9 przypadków wcześniej wygenerowanej funkcji i odrzucenie błędnego kandydata.
+Cały test trwał 360,91 s podczas równoległej przebudowy obrazów usług; raport
+jest w `.run/composition-packages/report.json`. To obserwacja przy współdzielonych
+zasobach, nie kontrolowany benchmark wydajności.
+
 ## Poprawki po pilocie
 
 Kolejny przegląd odtworzył błędy na rzeczywistych paczkach i dodał 11 regresji

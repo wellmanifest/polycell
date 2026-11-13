@@ -59,11 +59,12 @@ Tę samą wartość należy przekazać do `make dev`, `make parity` i `make benc
 - **MCP** (JSON-RPC stdio): `initialize`, `tools/list`, `tools/call` (`make mcp-test`).
 - **Postgres bez demona**: PGlite (WASM) przez `@electric-sql/pglite-socket`, gateway przez psycopg; zapis envelope i projekcji.
 - **Rejestr** `gen/registry.json` waliduje się względem oficjalnej schemy `wellmanifest.api-registry/v1` z `wellmanifest/nl-api-llm`.
-- **Digital twin**: scenariusz UI przez Chrome DevTools Protocol (paleta NL, proces, przełączanie transportu, walidacja) — PASS, zrzuty w `artifacts/twin/`.
+- **Digital twin**: generowane scenariusze wywołania każdej komórki oraz scenariusz checkout/NL przez Chrome DevTools Protocol; zrzuty w `artifacts/twin/`.
 - **Scenariusze TestTOON** (`tests/generated/*.testql.toon.yaml`) — 5/5 PASS.
 - **Docker**: obrazy zbudowane, `make docker-twin` — TestQL i CDP PASS; parytet oraz integracja HTTP/gRPC/stdio także PASS.
-- **Regresje gatewaya i paczek**: `make test` — 39 testów (walidacja, błędy HTTP, Git, zgodność testów z kontraktem, składanie aplikacji i tożsamość kwalifikowanego kodu).
-- **Integracja**: `make integration` — checkout przez trzy protokoły, trzy zapisane wywołania na proces, guard, logi i MCP.
+- **Regresje gatewaya i paczek**: `make test` — 47 testów (walidacja, błędy HTTP, Git, generacja, składanie aplikacji i tożsamość kwalifikowanego kodu).
+- **Integracja**: `make integration` sprawdza zainstalowane komórki/procesy, DB i MCP; repo demo dodatkowo sprawdza checkout i guard.
+- **Samodzielna kompozycja**: `make composition-test OUT=.run/composition-test` uruchamia aplikację z jedną komórką i bez checkout, łącznie z CDP. Ten test jest częścią CI.
 - **Adopcja legacy**: przechodzą istniejące golden cases; `prune` wykrywa 3 odwołania do starej funkcji. Pełnego cyklu wrap/switch/usunięcie nie powtarzano podczas tej weryfikacji.
 
 Pomiar round-trip (sekwencyjnie, 1 klient, localhost, `make bench N=300`):
