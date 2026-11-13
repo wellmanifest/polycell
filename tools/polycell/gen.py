@@ -37,7 +37,9 @@ TS = {"string": "string", "int32": "number", "int64": "number", "double": "numbe
 PY = {"string": "str", "int32": "int", "int64": "int", "double": "float", "bool": "bool", "json": "Any"}
 RS = {"string": "String", "int32": "i32", "int64": "i64", "double": "f64", "bool": "bool",
       "json": "serde_json::Value"}
-JS = {"string": {"type": "string"}, "int32": {"type": "integer"}, "int64": {"type": "integer"},
+JS = {"string": {"type": "string"},
+      "int32": {"type": "integer", "minimum": -(2**31), "maximum": 2**31 - 1},
+      "int64": {"type": "integer", "minimum": -(2**63), "maximum": 2**63 - 1},
       "double": {"type": "number"}, "bool": {"type": "boolean"}, "json": {}}
 SQL = {"string": "text", "int32": "integer", "int64": "bigint", "double": "double precision",
        "bool": "boolean", "json": "jsonb"}
@@ -51,7 +53,7 @@ def ts_t(t: TypeRef) -> str:
 def py_t(t: TypeRef) -> str:
     b = PY.get(t.base, t.base)
     b = f"list[{b}]" if t.is_list else b
-    return f"NotRequired[{b} | None]" if t.optional else b
+    return f"NotRequired[{b}]" if t.optional else b
 
 
 def rs_t(t: TypeRef) -> str:
@@ -113,13 +115,13 @@ def gen_ts(cells, types) -> None:
     out = [f"// {BANNER}", ""]
     for t, f in types.items():
         out.append(f"export interface {t} {{")
-        out += [f"  {k}{'?' if v.optional else ''}: {ts_t(v)}{' | null' if v.optional else ''};" for k, v in f.items()]
+        out += [f"  {k}{'?' if v.optional else ''}: {ts_t(v)};" for k, v in f.items()]
         out += ["}", ""]
     for c in cells:
         for kind, fields in (("Input", c.input), ("Output", c.output)):
             out.append(f"/** {c.urn} */")
             out.append(f"export interface {c.pascal}{kind} {{")
-            out += [f"  {k}{'?' if v.optional else ''}: {ts_t(v)}{' | null' if v.optional else ''};" for k, v in fields.items()]
+            out += [f"  {k}{'?' if v.optional else ''}: {ts_t(v)};" for k, v in fields.items()]
             out += ["}", ""]
     out.append("export const CELLS = " + json.dumps({c.urn: {"name": c.name, "owner": c.owner,
                "contract": c.interface_hash} for c in cells}, indent=2) + " as const;")

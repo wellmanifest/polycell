@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -50,6 +51,13 @@ def validate(value, schema: dict, defs: dict | None = None, path: str = "$") -> 
     if t == "number" and (not isinstance(value, (int, float)) or isinstance(value, bool)):
         return [f"{path}: expected number"]
     errs: list[str] = []
+    if t in ("integer", "number"):
+        if isinstance(value, float) and not math.isfinite(value):
+            return [f"{path}: expected finite {t}"]
+        for bound, outside in (("minimum", lambda limit: value < limit),
+                               ("maximum", lambda limit: value > limit)):
+            if bound in schema and outside(schema[bound]):
+                errs.append(f"{path}: outside {bound} {schema[bound]}")
     if t == "object":
         props = schema.get("properties", {})
         errs += [f"{path}.{k}: required" for k in schema.get("required", []) if k not in value]

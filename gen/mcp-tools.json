@@ -34,7 +34,9 @@
                 "type": "string"
               },
               "qty": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
               },
               "unit_price": {
                 "type": "number"
@@ -87,7 +89,9 @@
                 "type": "string"
               },
               "qty": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
               },
               "unit_price": {
                 "type": "number"
@@ -138,7 +142,9 @@
                 "type": "string"
               },
               "qty": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
               },
               "unit_price": {
                 "type": "number"
@@ -183,7 +189,9 @@
                 "type": "string"
               },
               "qty": {
-                "type": "integer"
+                "type": "integer",
+                "minimum": -2147483648,
+                "maximum": 2147483647
               },
               "unit_price": {
                 "type": "number"

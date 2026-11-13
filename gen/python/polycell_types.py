@@ -42,7 +42,7 @@ class PricingQuoteInput(TypedDict):
     """urn:wm:cell:shop:pricing.quote:v1"""
     items: list[LineItem]
     currency: str
-    coupon: NotRequired[str | None]
+    coupon: NotRequired[str]
 
 
 class PricingQuoteOutput(TypedDict):
