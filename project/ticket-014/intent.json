@@ -1,0 +1,27 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-014",
+  "summary": "Preserve JSON types and numeric precision in qualification",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-014/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "gateway/core.py",
+    "tests/test_comparison.py",
+    "tools/polycell/comparison.py",
+    "tools/polycell/package_worker.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null
+}
