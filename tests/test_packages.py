@@ -194,6 +194,25 @@ class PackageTests(unittest.TestCase):
         package.assemble([self.base], out, record_git=False)
         self.assertTrue((out / 'cellset.lock.json').is_file())
 
+    def test_assembled_agent_rules_work_without_repository_governance(self):
+        out = self.root / 'portable-app'
+        package.assemble([self.base], out, record_git=False)
+        rules = (out / 'AGENTS.md').read_text()
+        self.assertIn('make check', rules)
+        self.assertIn('make parity', rules)
+        self.assertIn('run(input) -> output', rules)
+        self.assertNotIn('.governance/', rules)
+        self.assertFalse((out / '.governance').exists())
+
+    def test_assembly_preserves_legacy_runtime_agent_rules(self):
+        runtime = self.root / 'legacy-runtime'
+        runtime.mkdir()
+        rules = 'Run make check and make parity before publishing.\n'
+        (runtime / 'AGENTS.md').write_text(rules)
+        out = self.root / 'legacy-app'
+        package.assemble([self.base], out, runtime=runtime, record_git=False)
+        self.assertEqual(rules, (out / 'AGENTS.md').read_text())
+
     def test_generator_failure_does_not_publish_partial_application(self):
         out = self.root / 'app'
         with patch.object(package.subprocess, 'run', side_effect=subprocess.CalledProcessError(1, 'gen')):
