@@ -53,7 +53,19 @@
           "lib/**",
           "packages/**",
           "test/**",
-          "tests/**"
+          "tests/**",
+          "cells/**",
+          "contracts/**",
+          "gateway/**",
+          "hosts/**",
+          "gen/**",
+          "tools/**",
+          "twin/**",
+          "examples/**",
+          "integrations/**",
+          "db/**",
+          "standard/**",
+          "adoption/**"
         ]
       },
       "governance": {
@@ -86,7 +98,9 @@
           "wellmanifest_governance.py",
           "worktree-guard.yaml",
           ".gitattributes",
-          ".github/workflows/new-project-branch-hygiene.yml"
+          ".github/workflows/new-project-branch-hygiene.yml",
+          "VERSION",
+          "compose.yml"
         ]
       },
       "infrastructure": {
@@ -95,12 +109,15 @@
           "compose*.yml",
           "compose*.yaml",
           "infra/**",
-          ".github/workflows/**"
+          ".github/workflows/**",
+          "docker/**",
+          "Makefile",
+          ".dockerignore",
+          ".nvmrc"
         ]
       },
       "integration": {
         "ownedPaths": [
-          "VERSION",
           "package.json",
           "package-lock.json",
           "pnpm-lock.yaml",
@@ -121,7 +138,8 @@
           "events/**",
           "error/**",
           "models/**",
-          "proto/**"
+          "proto/**",
+          "requirements.txt"
         ]
       },
       "interfaces": {
