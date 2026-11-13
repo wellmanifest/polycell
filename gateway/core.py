@@ -10,6 +10,8 @@ import time
 import uuid
 from pathlib import Path
 
+from tools.polycell.guards import guard_matches, parse_guard
+
 from . import transport
 from .db import DB
 
@@ -133,6 +135,11 @@ def plan(name: str, tr: str) -> dict:
         missing = [d for d in s.get("depends_on", []) if d not in seen]
         if missing or s["capability_ref"] not in CELLS:
             raise ValueError(f"invalid process step {s['id']}: deps={missing} urn={s['capability_ref']}")
+        if "guard" in s:
+            try:
+                parse_guard(s["guard"])
+            except ValueError as error:
+                raise ValueError(f"invalid process guard at {s['id']}: {error}") from error
         seen.add(s["id"])
         owner = CELLS[s["capability_ref"]]["owner"]
         steps.append({"id": s["id"], "capability_ref": s["capability_ref"], "contract": CELLS[s["capability_ref"]]["contract"],
@@ -157,12 +164,9 @@ def run_process(name: str, data: dict, tr: str | None = None) -> dict:
             ok, error = False, f"step {s['id']}: {r.get('error')}"
             break
         ctx["steps"][s["id"]] = r["output"]
-        g = s.get("guard")
-        if g:
-            m = re.fullmatch(r"\s*(\$\.[\w.]+)\s*==\s*(.+)\s*", g)
-            if m and _get(ctx, m[1]) != json.loads(m[2]):
-                ok, error = False, f"guard failed at {s['id']}: {g}"
-                break
+        if "guard" in s and not guard_matches(s["guard"], ctx):
+            ok, error = False, f"guard failed at {s['id']}: {s['guard']}"
+            break
     out = _resolve(p.get("output", {}), ctx) if ok else None
     res = {"ok": ok, "error": error, "output": out, "receipt": receipt, "plan": pl}
     try:
