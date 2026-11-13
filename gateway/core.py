@@ -9,6 +9,7 @@ import re
 import sys
 import time
 import uuid
+from copy import deepcopy
 from pathlib import Path
 
 from tools.polycell.guards import guard_matches, parse_guard
@@ -136,11 +137,22 @@ def _resolve(mapping, ctx):
 
 
 def plan(name: str, tr: str) -> dict:
-    p = PROCESSES[name]
+    return _plan(deepcopy(PROCESSES[name]), tr)
+
+
+def _plan(p: dict, tr: str) -> dict:
+    if tr not in transport.TRANSPORTS:
+        raise ValueError(f"unsupported process transport: {tr}")
     seen = set()
     steps = []
     for s in p["steps"]:
-        missing = [d for d in s.get("depends_on", []) if d not in seen]
+        step_id = s.get("id")
+        if not isinstance(step_id, str) or not step_id or step_id in seen:
+            raise ValueError(f"invalid or duplicate process step id: {step_id}")
+        dependencies = s.get("depends_on", [])
+        if not isinstance(dependencies, list) or any(not isinstance(d, str) for d in dependencies):
+            raise ValueError(f"invalid dependencies at process step {step_id}")
+        missing = [d for d in dependencies if d not in seen]
         if missing or s["capability_ref"] not in CELLS:
             raise ValueError(f"invalid process step {s['id']}: deps={missing} urn={s['capability_ref']}")
         if "guard" in s:
@@ -151,15 +163,20 @@ def plan(name: str, tr: str) -> dict:
         seen.add(s["id"])
         owner = CELLS[s["capability_ref"]]["owner"]
         steps.append({"id": s["id"], "capability_ref": s["capability_ref"], "contract": CELLS[s["capability_ref"]]["contract"],
-                      "binding": f"{tr}://host-{owner}"})
-    body = {"schema": "poa.plan/v1", "process_ref": p["process_ref"], "steps": steps}
-    body["plan_hash"] = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+                      "binding": f"{tr}://host-{owner}", "input": s.get("input", {}), "depends_on": dependencies,
+                      **{key: s[key] for key in ("guard", "kind", "effects") if key in s}})
+    # The compact plan includes every execution mapping. Detach its nested data
+    # so neither the registry nor an invocation can rewrite the hashed content.
+    body = deepcopy({"schema": "poa.plan/v1", "process_ref": p["process_ref"], "steps": steps,
+                     "input": p.get("input", {}), "output": p.get("output", {})})
+    body["plan_hash"] = hashlib.sha256(json.dumps(body, sort_keys=True, allow_nan=False).encode()).hexdigest()
     return body
 
 
 def run_process(name: str, data: dict, tr: str | None = None) -> dict:
     tr = tr or DEFAULT_TRANSPORT
-    p, pl = PROCESSES[name], plan(name, tr)
+    p = deepcopy(PROCESSES[name])
+    pl = _plan(p, tr)
     trace_id = uuid.uuid4().hex[:16]
     ctx = {**data, "steps": {}}
     receipt = {"schema": "poa.receipt/v1", "process_ref": p["process_ref"], "plan_hash": pl["plan_hash"],

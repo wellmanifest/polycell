@@ -110,6 +110,10 @@ def run(root: Path) -> list[dict]:
         if proc.get("schema") != "poa.process/v1" or not str(proc.get("process_ref", "")).startswith("poa://"):
             add("PC006", "error", f"{p.name}: schema must be poa.process/v1 and process_ref poa://...")
         for s in proc.get("steps", []):
+            step_id = s.get("id")
+            if not isinstance(step_id, str) or not step_id or step_id in ids:
+                add("PC006", "error", f"{p.name}: invalid or duplicate step id: {step_id}")
+                continue
             if "guard" in s:
                 try:
                     parse_guard(s["guard"])
