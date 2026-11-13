@@ -1,9 +1,11 @@
 """Regeneration is bounded, oracle-bound, and retains useful failures."""
+from contextlib import contextmanager
 import json
 from pathlib import Path
 import tempfile
+from types import ModuleType
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from jsonschema import Draft202012Validator
 from tools.polycell import forge, package
@@ -68,6 +70,16 @@ class FeedbackTests(unittest.TestCase):
                            'files': {target: self.source if source is None else source}},
                 'metrics': {'request_id': 'test-native-request'}}
 
+    @contextmanager
+    def provider(self, **options):
+        # Exercise the real adapter without requiring optional provider wheels.
+        sandbox = ModuleType('forge_base.sandbox')
+        sandbox.run_bounded = Mock(**options)
+        runtime = ModuleType('subllm.local_runtime')
+        runtime.render_profiles = lambda **kwargs: {'subllm.toml': ''}
+        with patch.dict('sys.modules', {'forge_base.sandbox': sandbox, 'subllm.local_runtime': runtime}):
+            yield sandbox.run_bounded
+
     def test_rejected_model_answer_is_retained_and_regenerated(self):
         rejected = [self.answer(target='wrong/cell.py'),
                     self.answer(source=self.source.replace(self.manifest['contract'], 'wrong-contract', 1))]
@@ -75,7 +87,7 @@ class FeedbackTests(unittest.TestCase):
             with self.subTest(answer=answer):
                 self.out, self.audit = self.root / f'accepted-{number}', self.root / f'audit-{number}'
                 replies = [json.dumps(answer).encode(), json.dumps(self.answer()).encode()]
-                with patch('forge_base.sandbox.run_bounded', side_effect=replies) as provider, \
+                with self.provider(side_effect=replies) as provider, \
                      patch.object(forge, 'qualify', side_effect=self.receipt) as qualify:
                     result = self.run_loop(2)
                 self.assertEqual(2, result['attempts'])
@@ -92,7 +104,7 @@ class FeedbackTests(unittest.TestCase):
 
     def test_rejected_model_answer_exhausts_budget_without_publication(self):
         answer = self.answer(target='wrong/cell.py')
-        with patch('forge_base.sandbox.run_bounded', return_value=json.dumps(answer).encode()) as provider, \
+        with self.provider(return_value=json.dumps(answer).encode()) as provider, \
              patch.object(forge, 'qualify') as qualify:
             with self.assertRaisesRegex(ValueError, 'after 2 attempts'):
                 self.run_loop(2)
@@ -102,6 +114,17 @@ class FeedbackTests(unittest.TestCase):
         for number in (1, 2):
             original = self.audit / f'attempt-{number:03}/provider/bundle.json'
             self.assertEqual(answer['bundle'], json.loads(original.read_text()))
+
+    def test_actual_provider_error_answer_stops_without_retry(self):
+        answer = {'error': 'provider unavailable', 'metrics': {'request_id': 'failed-request'}}
+        with self.provider(return_value=json.dumps(answer).encode()) as provider, \
+             patch.object(forge, 'qualify') as qualify:
+            with self.assertRaisesRegex(ValueError, 'generation failed'):
+                self.run_loop(2)
+        provider.assert_called_once()
+        qualify.assert_not_called()
+        self.assertFalse(self.out.exists())
+        self.assertIn('provider unavailable', (self.audit / 'report.json').read_text())
 
     def test_provider_failure_stops_without_repeating_calls(self):
         for error_type in (ValueError, RuntimeError, OSError):

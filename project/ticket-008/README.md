@@ -23,4 +23,6 @@ Raw output and failed fresh generations remain in external ignored evidence forg
 
 ## Validation and publication checkpoint
 
-The regression fails on accepted main7382032: wrong target and conflicting header stop immediately, while exhaustion reports generation failure after one call. The candidate passes9 focused tests and78 full tests. Local governance passes with zero findings. The existing provider failure tests retain one-call fail-stop behavior. Raw responses remain private per-attempt bundle.json; only qualified candidates become public. Native CI and independent Validator approval/merge remain required.
+The regression fails on accepted main7382032: wrong target and conflicting header stop immediately, while exhaustion reports generation failure after one call. The candidate passes10 focused tests and79 full tests. Local governance passes with zero findings. The existing provider failure tests retain one-call fail-stop behavior. Raw responses remain private per-attempt bundle.json; only qualified candidates become public. Native CI and independent Validator approval/merge remain required.
+
+The adapter fixtures also pass with imports of optional Forge/SubLLM packages deliberately refused. Only provider transport and profile generation are replaced; the real adapter, audit persistence, classification and bounded loop execute. A native provider-error answer is separately verified to stop after one call.
