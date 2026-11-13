@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wm:polycell:compact-plan:v1",
+  "title": "Polycell compact process plan",
+  "description": "The existing compact plan projection emitted by the Polycell gateway. Execution mappings extend its original routing fields. Hashes use the gateway's existing sorted-key Python JSON serialization profile, with non-finite numbers rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "process_ref", "steps", "plan_hash"],
+  "properties": {
+    "schema": {"const": "poa.plan/v1"},
+    "process_ref": {"type": "string", "pattern": "^poa://"},
+    "input": {"description": "Declared process input shape."},
+    "output": {"description": "Process result mapping or literal value."},
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "capability_ref", "contract", "binding"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "capability_ref": {"type": "string", "pattern": "^urn:wm:cell:"},
+          "contract": {"type": "string", "minLength": 1},
+          "binding": {"type": "string", "pattern": "^(http|grpc|stdio)://host-(python|ts|rust)$"},
+          "input": {"description": "Arguments mapping or reference, resolved before invocation."},
+          "depends_on": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "guard": {"type": "string", "minLength": 1},
+          "kind": {"description": "Declared step classification."},
+          "effects": {"description": "Declared effect metadata."}
+        }
+      }
+    },
+    "plan_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of UTF-8 json.dumps(plan_without_plan_hash, sort_keys=True, ensure_ascii=True, allow_nan=False), using separators comma-space and colon-space. All visible execution mappings participate."
+    }
+  }
+}
