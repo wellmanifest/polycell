@@ -37,8 +37,9 @@ na właściwych zadaniach i jasnych kontraktach.
 | Właściwa odpowiedź Qwen, użyta później przez replay | 16,38 s; 1444 tokeny wejścia, 286 wyjścia |
 | Właściwa odpowiedź Nvidia, użyta później przez replay | 234,27 s; 1402 tokeny wejścia, 267 wyjścia |
 | Kwalifikacja wygenerowanego Pythona po replay | 0,52–1,10 s wewnątrz workera |
-| Kwalifikacja TS | około 0,9 s wewnątrz workera |
-| Kwalifikacja Rust po poprawie ścieżki cache Cargo | około 34 s, w tym kompilacja |
+| Kwalifikacja TS | 0,66–0,9 s wewnątrz workera |
+| Kwalifikacja Rust po poprawie ścieżki cache Cargo | 27–34 s, w tym kompilacja |
+| Końcowy test czterech paczek, Git, odrzucenia błędu i assembly | 81,46 s łącznie, bez inferencji i pełnych testów aplikacji |
 | Rozmiar jednego przenośnego `git bundle` | około 4,7–5,8 kB |
 | Wspólny obraz kompilatora/runnera | około 1,76 GB; pierwszy build trwał kilka minut |
 
@@ -67,6 +68,10 @@ Naprawiono czytelność cache dla użytkownika 65534. Zachowanie oryginalnej śc
 Cargo ograniczyło ponowną kompilację z około 95 do około 34 s. Chrome otrzymał
 oczekiwanie na gotowość CDP, eliminujące wyścig startu testów.
 
+CI wykryło zależność klonowania bundle od lokalnego `init.defaultBranch`.
+Bundle zawiera teraz także `HEAD`; regresja sprawdza klonowanie z domyślną
+gałęzią `master`, `main` i dowolną własną nazwą.
+
 ## Zakres standardu i dalsze granice
 
 Paczka ma kontrakt `wellmanifest.polycell.package/v1`; aplikacja zapisuje pełne
@@ -82,5 +87,6 @@ rejestru, podpisów paczek i szerszego benchmarku wielu rzeczywistych zmian.
 
 Instrukcja odtworzenia: [FORGE-HARNESS.md](FORGE-HARNESS.md).
 Lokalne artefakty: `.run/harness-acceptance/` (bundles, klony, aplikacja, raport),
+`.run/harness-acceptance-final/` (końcowy pomiar pakowania i kwalifikacji),
 `.run/forge-audit/` (prywatny audyt modeli), `artifacts/harness/` (kwalifikacje).
 Nie są automatycznie publikowane razem z repozytorium.

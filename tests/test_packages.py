@@ -75,10 +75,13 @@ class PackageTests(unittest.TestCase):
     def test_git_bundle_roundtrip(self):
         bundle = self.root / 'shipping.bundle'
         commit = package.git_snapshot(self.base, bundle)
-        clone = self.root / 'clone'
-        subprocess.run(['git', 'clone', '--quiet', str(bundle), str(clone)], check=True)
-        self.assertEqual(self.manifest, package.verify(clone))
-        self.assertEqual(commit, subprocess.check_output(['git', '-C', str(clone), 'rev-parse', 'HEAD'], text=True).strip())
+        for default_branch in ('master', 'main', 'custom-default'):
+            with self.subTest(default_branch=default_branch):
+                clone = self.root / ('clone-' + default_branch)
+                subprocess.run(['git', '-c', 'init.defaultBranch=' + default_branch,
+                                'clone', '--quiet', str(bundle), str(clone)], check=True)
+                self.assertEqual(self.manifest, package.verify(clone))
+                self.assertEqual(commit, subprocess.check_output(['git', '-C', str(clone), 'rev-parse', 'HEAD'], text=True).strip())
 
     def test_bundle_cannot_overwrite_or_live_inside_package(self):
         for bundle in (self.base / 'self.bundle', self.base / 'cell.py'):

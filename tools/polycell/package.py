@@ -152,7 +152,7 @@ def git_snapshot(directory: Path, bundle: Path | None = None) -> str:
     git("-c", "user.name=Polycell package", "-c", "user.email=polycell@localhost", "commit", "-m", "Snapshot single-cell package")
     if bundle:
         bundle.parent.mkdir(parents=True, exist_ok=True)
-        git("bundle", "create", str(bundle.resolve()), "main")
+        git("bundle", "create", str(bundle.resolve()), "main", "HEAD")
     return git("rev-parse", "HEAD")
 
 
