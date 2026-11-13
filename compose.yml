@@ -7,7 +7,6 @@ x-py: &py
     additional_contexts:
       ts_host: service:host-ts
       rust_host: service:host-rust
-  image: polycell/python:dev
 
 services:
   # --- dane: Postgres jako proces aplikacyjny (PGlite/WASM), dane w wolumenie jak plik SQLite
@@ -61,7 +60,7 @@ services:
   # --- digital twin / sandbox (profil: twin)
   chrome:
     profiles: [twin]
-    image: chromedp/headless-shell:latest
+    image: chromedp/headless-shell@sha256:830fa77e0602cb42e5cb2cbd9237ba27b649ad69d5fb82b54713aac8b7ab4f29
     ports: ["${CHROME_PORT:-9222}:9222"]                   # CDP dostępne także z hosta (np. dla agenta AI)
   twin:
     profiles: [twin]
@@ -78,14 +77,14 @@ services:
     volumes: ["./twin:/app/twin:ro", "./tests:/app/tests:ro"]
   logs:
     profiles: [twin]
-    image: amir20/dozzle:latest                           # podgląd logów wszystkich kontenerów w przeglądarce
+    image: amir20/dozzle@sha256:244f218c876d6ed766277e71a537f34bfb2c01829e1927737e3673a8327deeb8                           # podgląd logów wszystkich kontenerów w przeglądarce
     ports: ["8888:8080"]
     volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
 
   # --- alternatywa: klasyczny serwer Postgres (profil: pgserver), gdy potrzebne wiele połączeń
   postgres:
     profiles: [pgserver]
-    image: postgres:17-alpine
+    image: postgres@sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065  # 17-alpine
     environment: { POSTGRES_PASSWORD: postgres }
     ports: ["5432:5432"]
 

@@ -1,0 +1,169 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-001",
+  "summary": "Adopt wellmanifest/new-project 0.20.147 governance so tickets, canonical worktrees and independent publication apply to polycell",
+  "workstream": "governance",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "project/ticket-001/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    ".governance/**",
+    ".aider.conf.yml",
+    ".cursor/rules/**",
+    ".gitattributes",
+    ".githooks/**",
+    ".github/copilot-instructions.md",
+    ".github/workflows/new-project-branch-hygiene.yml",
+    ".github/workflows/new-project-governance.yml",
+    ".gitignore",
+    ".subactor/.gitignore",
+    ".subactor/manifest.json",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "CHANGELOG.md",
+    "VERSION",
+    "README.md",
+    "project.sh",
+    "project.bat",
+    "project/governance-check.sh",
+    "project/governance-check.bat",
+    "project/new-ticket.sh",
+    "project/readme.sh",
+    "project/polycell-agent-rules.md",
+    "scripts/install-agent-hosts.sh",
+    "scripts/runtime.sh",
+    "wellmanifest_governance.py",
+    "worktree-guard.yaml",
+    "compose.yml"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "bf023f05c9c635e29b413ff178b0855186ccb12d",
+    "targetBranch": "main",
+    "outcome": "polycell is governed by the pinned new-project 0.20.147 package: tickets, canonical worktrees and independent publication.",
+    "nonGoals": [
+      "Change cells, contracts, hosts or gateway behaviour",
+      "Change the existing Test polycell workflow",
+      "Change GitHub branch protection or Validator admission"
+    ],
+    "complexity": "L",
+    "estimatedMinutes": 60,
+    "budgets": {
+      "maxImplementationFiles": 15,
+      "maxAffectedComponents": 4,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Install the complete published managed set through Goal's native bootstrap route, tailor only the target-owned manifest workstream paths to the polycell layout, and keep repository agent rules beside the managed AGENTS.md.",
+      "components": [
+        {
+          "name": "governance-package",
+          "paths": [
+            ".governance/**",
+            ".githooks/**",
+            ".github/**",
+            ".cursor/rules/**",
+            ".aider.conf.yml",
+            ".gitattributes",
+            ".gitignore",
+            ".subactor/**",
+            "AGENTS.md",
+            "CLAUDE.md",
+            "GEMINI.md",
+            "project.sh",
+            "project.bat",
+            "project/governance-check.sh",
+            "project/governance-check.bat",
+            "project/new-ticket.sh",
+            "project/readme.sh",
+            "scripts/**",
+            "wellmanifest_governance.py",
+            "worktree-guard.yaml"
+          ]
+        },
+        {
+          "name": "baseline-files",
+          "paths": [
+            "VERSION",
+            "CHANGELOG.md",
+            "TODO.md",
+            "project/TICKETS.md",
+            "project/ticket-001/**"
+          ]
+        },
+        {
+          "name": "agent-rules",
+          "paths": [
+            "README.md",
+            "project/polycell-agent-rules.md"
+          ]
+        },
+        {
+          "name": "compose-image-pins",
+          "paths": [
+            "compose.yml"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert the ticket commit through protected review; no runtime or data migration is performed."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "./project/governance-check.sh --actor agent"
+        ],
+        "evidence": "Governance gate passes on the ticket head."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "git check-ignore .worktrees/x"
+        ],
+        "evidence": "/.worktrees/ is root-ignored and the allocator created the canonical worktree."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "git diff --check"
+        ],
+        "evidence": "Previous agent rules are kept as project/polycell-agent-rules.md and linked from README.md."
+      },
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "docker compose -f compose.yml config -q"
+        ],
+        "evidence": "Compose file with digest-pinned images still parses."
+      }
+    ],
+    "standardAdoption": {
+      "sourceRepository": "wellmanifest/new-project",
+      "fromRevision": null,
+      "toRevision": "511eb0ab1c0f9f8697c44f5748ba93b25da5e0d9"
+    }
+  }
+}
