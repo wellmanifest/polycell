@@ -1,0 +1,125 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "polycell",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/cells/customer.validate": {
+      "post": {
+        "operationId": "customer_validate",
+        "summary": "Waliduje i normalizuje dane klienta",
+        "x-urn": "urn:wm:cell:shop:customer.validate:v1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "jsonschema/customer.validate.input.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "jsonschema/customer.validate.output.json"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cells/notify.render": {
+      "post": {
+        "operationId": "notify_render",
+        "summary": "Renderuje treść powiadomienia o zamówieniu (PL/EN)",
+        "x-urn": "urn:wm:cell:shop:notify.render:v1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "jsonschema/notify.render.input.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "jsonschema/notify.render.output.json"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cells/pricing.quote": {
+      "post": {
+        "operationId": "pricing_quote",
+        "summary": "Oblicza wycenę koszyka (suma, rabat z kuponu, VAT, razem)",
+        "x-urn": "urn:wm:cell:shop:pricing.quote:v1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "jsonschema/pricing.quote.input.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "jsonschema/pricing.quote.output.json"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cells/shipping.cost": {
+      "post": {
+        "operationId": "shipping_cost",
+        "summary": "Koszt wysyłki wg starego cennika",
+        "x-urn": "urn:wm:cell:shop:shipping.cost:v1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "jsonschema/shipping.cost.input.json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "jsonschema/shipping.cost.output.json"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

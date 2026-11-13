@@ -1,0 +1,30 @@
+# Kontrakt wygenerowany przez adopt.py wrap - uzupełnij typy wyjścia i przykłady.
+schema: wellmanifest.polycell.cell/v1
+urn: urn:wm:cell:shop:shipping.cost:v1
+name: shipping.cost
+version: 0.1.0
+owner: python
+summary: Koszt wysyłki wg starego cennika
+effects:
+- pure
+impl: cell
+replaces:
+- legacy_pricing.py:shipping_cost
+input:
+  weight_kg: double
+  country: string
+output:
+  result: double
+nl:
+  pl:
+  - shipping cost
+  en:
+  - shipping cost
+menu:
+  category: Legacy
+  label: shipping_cost
+  interactionType: modal_form
+examples:
+- name: pl_light
+  input: {weight_kg: 3, country: PL}
+  output: {result: 9.99}

@@ -1,0 +1,4 @@
+{"input": {"country": "PL", "weight_kg": 3}, "output": {"result": 9.99}}
+{"input": {"country": "PL", "weight_kg": 8}, "output": {"result": 19.99}}
+{"input": {"country": "DE", "weight_kg": 2}, "output": {"result": 29.99}}
+{"input": {"country": "US", "weight_kg": 12.5}, "output": {"result": 49.99}}

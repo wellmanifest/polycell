@@ -1,0 +1,287 @@
+"""Rdzeń gatewaya: walidacja kontraktu, routing URN -> host, zapis do DB, procesy POA, NL, parity."""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+import uuid
+from pathlib import Path
+
+from . import transport
+from .db import DB
+
+ROOT = transport.ROOT
+INDEX = json.loads((ROOT / "gen/cells.index.json").read_text())
+CELLS: dict = INDEX["cells"]
+PROCESSES: dict = INDEX["processes"]
+REGISTRY = json.loads((ROOT / "gen/registry.json").read_text())
+BY_NAME = {m["name"]: u for u, m in CELLS.items()}
+DEFAULT_TRANSPORT = os.environ.get("WM_TRANSPORT", "grpc")
+_db: DB | None = None
+
+
+def db() -> DB:
+    global _db
+    if _db is None:
+        _db = DB()
+    return _db
+
+
+# ------------------------------------------------------------- mini JSON Schema (bez zależności)
+def _schema(name: str, kind: str) -> dict:
+    return json.loads((ROOT / "gen/jsonschema" / f"{name}.{kind}.json").read_text())
+
+
+def validate(value, schema: dict, defs: dict | None = None, path: str = "$") -> list[str]:
+    defs = defs if defs is not None else schema.get("$defs", {})
+    if "$ref" in schema:
+        return validate(value, defs[schema["$ref"].split("/")[-1]], defs, path)
+    t = schema.get("type")
+    checks = {"object": dict, "array": list, "string": str, "boolean": bool}
+    if t in checks and not isinstance(value, checks[t]):
+        return [f"{path}: expected {t}"]
+    if t == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+        return [f"{path}: expected integer"]
+    if t == "number" and (not isinstance(value, (int, float)) or isinstance(value, bool)):
+        return [f"{path}: expected number"]
+    errs: list[str] = []
+    if t == "object":
+        props = schema.get("properties", {})
+        errs += [f"{path}.{k}: required" for k in schema.get("required", []) if k not in value]
+        if schema.get("additionalProperties") is False:
+            errs += [f"{path}.{k}: unknown field" for k in value if k not in props]
+        for k, v in value.items():
+            if k in props:
+                errs += validate(v, props[k], defs, f"{path}.{k}")
+    if t == "array":
+        for i, v in enumerate(value):
+            errs += validate(v, schema.get("items", {}), defs, f"{path}[{i}]")
+    return errs
+
+
+# ------------------------------------------------------------- wywołanie komórki
+def invoke(urn_or_name: str, data: dict, transport_name: str | None = None, trace_id: str | None = None,
+           persist: bool = True) -> dict:
+    urn = BY_NAME.get(urn_or_name, urn_or_name)
+    trace_id = trace_id or uuid.uuid4().hex[:16]
+    tr = transport_name or DEFAULT_TRANSPORT
+    if urn not in CELLS:
+        return {"ok": False, "urn": urn, "error": "unknown urn", "trace_id": trace_id}
+    meta = CELLS[urn]
+    errs = validate(data, _schema(meta["name"], "input"))
+    if errs:
+        r = {"urn": urn, "ok": False, "output": None, "error": "input contract: " + "; ".join(errs), "lang": meta["owner"],
+             "transport": tr}
+    else:
+        r = transport.call(meta["owner"], tr, urn, data, trace_id)
+        if r.get("ok"):
+            oerrs = validate(r["output"], _schema(meta["name"], "output"))
+            if oerrs:  # komórka złamała kontrakt -> fail-closed (luka wykryta zanim trafi do klienta)
+                r.update(ok=False, error="output contract: " + "; ".join(oerrs))
+            elif r.get("contract") != meta["contract"]:
+                r.update(ok=False, error=f"contract mismatch host={r.get('contract')} registry={meta['contract']}")
+    r["trace_id"] = trace_id
+    if persist:
+        _persist(urn, meta, data, r)
+    return r
+
+
+def _persist(urn: str, meta: dict, data: dict, r: dict) -> None:
+    try:
+        d = db()
+        d.insert("wm_invocations", {"trace_id": r["trace_id"], "urn": urn, "transport": r.get("transport", "?"),
+                                    "lang": r.get("lang"), "ok": bool(r.get("ok")), "input": data, "output": r.get("output"),
+                                    "error": r.get("error") or None, "duration_ms": r.get("duration_ms"),
+                                    "contract": meta["contract"]}, {"input", "output"})
+        if meta.get("persist") and r.get("ok"):
+            row, jcols = {"trace_id": r["trace_id"]}, set()
+            for prefix, fields, src in (("in", meta["input"], data), ("out", meta["output"], r["output"])):
+                for k, t in fields.items():
+                    col = f"{prefix}_{k}"
+                    row[col] = src.get(k)
+                    if t["is_list"] or t["base"] not in ("string", "int32", "int64", "double", "bool"):
+                        jcols.add(col)
+            d.insert(meta["persist"], row, jcols)
+    except Exception as e:  # noqa: BLE001 - zapis nie może zatrzymać odpowiedzi; trafia do logów
+        log(event="persist_error", urn=urn, error=str(e))
+
+
+# ------------------------------------------------------------- POA: proces = kompozycja URN
+def _get(ctx: dict, expr):
+    if not (isinstance(expr, str) and expr.startswith("$.")):
+        return expr
+    cur = ctx
+    for part in expr[2:].split("."):
+        cur = cur.get(part) if isinstance(cur, dict) else None
+    return cur
+
+
+def _resolve(mapping, ctx):
+    if isinstance(mapping, dict):
+        return {k: v for k, v in ((k, _resolve(v, ctx)) for k, v in mapping.items()) if v is not None}
+    return _get(ctx, mapping)
+
+
+def plan(name: str, tr: str) -> dict:
+    p = PROCESSES[name]
+    seen = set()
+    steps = []
+    for s in p["steps"]:
+        missing = [d for d in s.get("depends_on", []) if d not in seen]
+        if missing or s["capability_ref"] not in CELLS:
+            raise ValueError(f"invalid process step {s['id']}: deps={missing} urn={s['capability_ref']}")
+        seen.add(s["id"])
+        owner = CELLS[s["capability_ref"]]["owner"]
+        steps.append({"id": s["id"], "capability_ref": s["capability_ref"], "contract": CELLS[s["capability_ref"]]["contract"],
+                      "binding": f"{tr}://host-{owner}"})
+    body = {"schema": "poa.plan/v1", "process_ref": p["process_ref"], "steps": steps}
+    body["plan_hash"] = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
+    return body
+
+
+def run_process(name: str, data: dict, tr: str | None = None) -> dict:
+    tr = tr or DEFAULT_TRANSPORT
+    p, pl = PROCESSES[name], plan(name, tr)
+    trace_id = uuid.uuid4().hex[:16]
+    ctx = {**data, "steps": {}}
+    receipt = {"schema": "poa.receipt/v1", "process_ref": p["process_ref"], "plan_hash": pl["plan_hash"],
+               "trace_id": trace_id, "steps": []}
+    ok, error = True, ""
+    for s in p["steps"]:
+        r = invoke(s["capability_ref"], _resolve(s.get("input", {}), ctx), tr, trace_id)
+        receipt["steps"].append({k: r.get(k) for k in ("ok", "lang", "transport", "duration_ms", "contract", "error")} | {"id": s["id"]})
+        if not r.get("ok"):
+            ok, error = False, f"step {s['id']}: {r.get('error')}"
+            break
+        ctx["steps"][s["id"]] = r["output"]
+        g = s.get("guard")
+        if g:
+            m = re.fullmatch(r"\s*(\$\.[\w.]+)\s*==\s*(.+)\s*", g)
+            if m and _get(ctx, m[1]) != json.loads(m[2]):
+                ok, error = False, f"guard failed at {s['id']}: {g}"
+                break
+    out = _resolve(p.get("output", {}), ctx) if ok else None
+    res = {"ok": ok, "error": error, "output": out, "receipt": receipt, "plan": pl}
+    try:
+        db().insert("wm_process_runs", {"trace_id": trace_id, "process_ref": p["process_ref"], "ok": ok,
+                                        "input": data, "output": out, "receipt": receipt}, {"input", "output", "receipt"})
+    except Exception as e:  # noqa: BLE001
+        log(event="persist_error", process=name, error=str(e))
+    return res
+
+
+# ------------------------------------------------------------- NL -> API (fast path + opcjonalny LLM)
+def _tok(s: str) -> set[str]:
+    return set(re.findall(r"\w+", s.lower()))
+
+
+def nl_match(text: str) -> dict:
+    words = _tok(text)
+    best = {"score": 0.0}
+    for ep in REGISTRY["endpoints"]:
+        for intent in ep.get("nlIntents", []):
+            for ph in intent["phrases"]:
+                pt = _tok(ph)
+                score = len(words & pt) / max(len(pt), 1)
+                if score > best["score"]:
+                    best = {"score": round(score, 2), "endpoint": ep["id"], "path": ep.get("rest", {}).get("path"),
+                            "phrase": ph, "lang": intent["lang"]}
+    best["matched"] = best["score"] >= 0.6
+    if not best["matched"] and os.environ.get("LLM_BASE_URL"):
+        best["llm"] = _llm_compile(text)
+    return best
+
+
+def _llm_compile(text: str) -> dict:
+    """Fallback LLM (dowolne API zgodne z OpenAI). Model może wybrać TYLKO endpoint z rejestru -
+    odpowiedź jest walidowana; nic poza listą nie zostanie wykonane (fail-closed, jak w nl-dsl-llm)."""
+    import urllib.request
+    ids = [e["id"] for e in REGISTRY["endpoints"] if e["protocol"] == "rest"]
+    prompt = (f"Choose one endpoint id from {ids} for the user request and return JSON "
+              f'{{"endpoint": "<id>", "input": {{...}}}}. Request: {text}')
+    req = urllib.request.Request(os.environ["LLM_BASE_URL"].rstrip("/") + "/chat/completions",
+                                 data=json.dumps({"model": os.environ.get("LLM_MODEL", "local"),
+                                                  "messages": [{"role": "user", "content": prompt}],
+                                                  "response_format": {"type": "json_object"}}).encode(),
+                                 headers={"content-type": "application/json",
+                                          "authorization": f"Bearer {os.environ.get('LLM_API_KEY', '')}"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            out = json.loads(json.loads(r.read())["choices"][0]["message"]["content"])
+        return out if out.get("endpoint") in ids else {"error": "llm chose unknown endpoint"}
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e)}
+
+
+# ------------------------------------------------------------- parity: te same przypadki na każdym protokole
+def parity(transports=transport.TRANSPORTS) -> dict:
+    cases = json.loads((ROOT / "tests/generated/cases.json").read_text())
+    rows = []
+    for c in cases:
+        row = {"case": c["name"], "lang": c["owner"]}
+        for tr in transports:
+            r = invoke(c["urn"], c["input"], tr, persist=False)
+            row[tr] = "ok" if r.get("ok") and _eq(r["output"], c["output"]) else f"FAIL {r.get('error') or r.get('output')}"
+            row[f"{tr}_rtt_ms"] = r.get("rtt_ms")
+        rows.append(row)
+    return {"all_ok": all(row[t] == "ok" for row in rows for t in transports), "rows": rows}
+
+
+def _eq(a, b) -> bool:
+    if isinstance(a, float) or isinstance(b, float):
+        return isinstance(a, (int, float)) and isinstance(b, (int, float)) and abs(a - b) < 1e-9
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(_eq(a[k], b[k]) for k in a)
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_eq(x, y) for x, y in zip(a, b))
+    return a == b
+
+
+# ------------------------------------------------------------- logi (ring buffer + docker socket)
+LOGS: list[dict] = []
+
+
+def log(**kw) -> None:
+    rec = {"ts": time.time(), "svc": "gateway", **kw}
+    LOGS.append(rec)
+    del LOGS[:-500]
+    print(json.dumps(rec, ensure_ascii=False), file=sys.stderr, flush=True)  # stdout zostaje czyste (MCP/stdio)
+
+
+def docker_logs(tail: int = 100) -> dict:
+    """Logi wszystkich kontenerów projektu przez /var/run/docker.sock (tylko odczyt).
+    W trybie natywnym (make dev) czyta .run/logs/*.log."""
+    sock = os.environ.get("DOCKER_SOCK", "/var/run/docker.sock")
+    out: dict[str, list[str]] = {}
+    if Path(sock).exists():
+        import http.client
+        import socket
+
+        class Unix(http.client.HTTPConnection):
+            def connect(self):
+                self.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                self.sock.connect(sock)
+
+        def get(path):
+            c = Unix("localhost")
+            c.request("GET", path)
+            return c.getresponse().read()
+
+        project = os.environ.get("COMPOSE_PROJECT_NAME", "polycell")
+        flt = json.dumps({"label": [f"com.docker.compose.project={project}"]})
+        import urllib.parse
+        for ctr in json.loads(get("/containers/json?filters=" + urllib.parse.quote(flt))):
+            raw = get(f"/containers/{ctr['Id']}/logs?stdout=1&stderr=1&tail={tail}")
+            lines, i = [], 0
+            while i + 8 <= len(raw):  # multipleksowany strumień docker: 8-bajtowy nagłówek
+                n = int.from_bytes(raw[i + 4:i + 8], "big")
+                lines += raw[i + 8:i + 8 + n].decode(errors="replace").splitlines()
+                i += 8 + n
+            out[ctr["Names"][0].lstrip("/")] = lines
+    for f in sorted((ROOT / ".run/logs").glob("*.log")):
+        out[f.stem] = f.read_text(errors="replace").splitlines()[-tail:]
+    out["gateway(memory)"] = [json.dumps(r, ensure_ascii=False) for r in LOGS[-tail:]]
+    return out

@@ -1,0 +1,26 @@
+schema: wellmanifest.polycell.cell/v1
+urn: urn:wm:cell:shop:notify.render:v1
+name: notify.render
+version: 1.0.0
+owner: ts
+summary: Renderuje treść powiadomienia o zamówieniu (PL/EN)
+effects: [pure]
+input:
+  customer_name: string
+  total: double
+  currency: string
+  lang: string
+output:
+  subject: string
+  body: string
+nl:
+  pl: ["przygotuj powiadomienie", "wygeneruj wiadomość"]
+  en: ["render notification"]
+menu: {category: Komunikacja, label: Podgląd powiadomienia, icon: mail, interactionType: modal_form}
+examples:
+  - name: pl
+    input: {customer_name: Jan, total: 221.4, currency: PLN, lang: pl}
+    output: {subject: "Potwierdzenie zamówienia: 221.40 PLN", body: "Dzień dobry Jan, Twoje zamówienie na kwotę 221.40 PLN zostało przyjęte."}
+  - name: en
+    input: {customer_name: Ann, total: 36.26, currency: EUR, lang: en}
+    output: {subject: "Order confirmation: 36.26 EUR", body: "Hello Ann, your order for 36.26 EUR has been accepted."}

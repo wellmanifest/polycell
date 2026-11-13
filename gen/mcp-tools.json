@@ -1,0 +1,202 @@
+{
+  "tools": [
+    {
+      "name": "customer_validate",
+      "description": "Waliduje i normalizuje dane klienta [urn:wm:cell:shop:customer.validate:v1]",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:wm:cell:shop:customer.validate:v1#input",
+        "title": "CustomerValidateInput",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "email",
+          "country"
+        ],
+        "$defs": {
+          "LineItem": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sku": {
+                "type": "string"
+              },
+              "qty": {
+                "type": "integer"
+              },
+              "unit_price": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "sku",
+              "qty",
+              "unit_price"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "notify_render",
+      "description": "Renderuje treść powiadomienia o zamówieniu (PL/EN) [urn:wm:cell:shop:notify.render:v1]",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:wm:cell:shop:notify.render:v1#input",
+        "title": "NotifyRenderInput",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "customer_name": {
+            "type": "string"
+          },
+          "total": {
+            "type": "number"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "lang": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "customer_name",
+          "total",
+          "currency",
+          "lang"
+        ],
+        "$defs": {
+          "LineItem": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sku": {
+                "type": "string"
+              },
+              "qty": {
+                "type": "integer"
+              },
+              "unit_price": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "sku",
+              "qty",
+              "unit_price"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "pricing_quote",
+      "description": "Oblicza wycenę koszyka (suma, rabat z kuponu, VAT, razem) [urn:wm:cell:shop:pricing.quote:v1]",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:wm:cell:shop:pricing.quote:v1#input",
+        "title": "PricingQuoteInput",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/LineItem"
+            }
+          },
+          "currency": {
+            "type": "string"
+          },
+          "coupon": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "currency"
+        ],
+        "$defs": {
+          "LineItem": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sku": {
+                "type": "string"
+              },
+              "qty": {
+                "type": "integer"
+              },
+              "unit_price": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "sku",
+              "qty",
+              "unit_price"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "shipping_cost",
+      "description": "Koszt wysyłki wg starego cennika [urn:wm:cell:shop:shipping.cost:v1]",
+      "inputSchema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "urn:wm:cell:shop:shipping.cost:v1#input",
+        "title": "ShippingCostInput",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "weight_kg": {
+            "type": "number"
+          },
+          "country": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "weight_kg",
+          "country"
+        ],
+        "$defs": {
+          "LineItem": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sku": {
+                "type": "string"
+              },
+              "qty": {
+                "type": "integer"
+              },
+              "unit_price": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "sku",
+              "qty",
+              "unit_price"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

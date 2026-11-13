@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wm:cell:shop:shipping.cost:v1#output",
+  "title": "ShippingCostOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "result": {
+      "type": "number"
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "$defs": {
+    "LineItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sku": {
+          "type": "string"
+        },
+        "qty": {
+          "type": "integer"
+        },
+        "unit_price": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sku",
+        "qty",
+        "unit_price"
+      ]
+    }
+  }
+}

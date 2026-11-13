@@ -1,0 +1,44 @@
+# Proces POA: kompozycja komórek z różnych języków po URN (SOA = komórki, POA = proces).
+# Definicja zawiera wyłącznie capability_ref (URN), nigdy adresy/transport.
+# Wiązanie URN -> host/protokół robi planner (gateway) na podstawie gen/registry.json.
+schema: poa.process/v1
+process_ref: poa://shop.local/process/checkout/v1
+title: Checkout - walidacja klienta, wycena, powiadomienie
+owner: service:gateway
+input:
+  customer: {name: string, email: string, country: string}
+  cart: {items: "LineItem[]", currency: string, coupon: "string?"}
+  lang: string
+steps:
+  - id: validate
+    capability_ref: urn:wm:cell:shop:customer.validate:v1
+    kind: query
+    effects: [read_data]
+    depends_on: []
+    input: {name: $.customer.name, email: $.customer.email, country: $.customer.country}
+    guard: $.steps.validate.valid == true      # fail-closed: zatrzymaj proces gdy false
+  - id: quote
+    capability_ref: urn:wm:cell:shop:pricing.quote:v1
+    kind: query
+    effects: [read_data]
+    depends_on: [validate]
+    input: {items: $.cart.items, currency: $.cart.currency, coupon: $.cart.coupon}
+  - id: notify
+    capability_ref: urn:wm:cell:shop:notify.render:v1
+    kind: command
+    effects: [local_write]
+    depends_on: [quote]
+    input: {customer_name: $.customer.name, total: $.steps.quote.total, currency: $.steps.quote.currency, lang: $.lang}
+output:
+  customer: $.steps.validate
+  quote: $.steps.quote
+  message: $.steps.notify
+examples:
+  - name: happy
+    input:
+      customer: {name: Jan, email: JAN@EXAMPLE.COM, country: pl}
+      cart: {items: [{sku: A1, qty: 2, unit_price: 50.0}, {sku: B2, qty: 1, unit_price: 100.0}], currency: PLN, coupon: AI10}
+      lang: pl
+    expect:
+      quote.total: 221.4
+      message.subject: "Potwierdzenie zamówienia: 221.40 PLN"

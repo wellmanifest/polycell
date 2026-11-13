@@ -1,0 +1,16 @@
+# SCENARIO: customer.validate contract
+# TYPE: api
+# GENERATED: true
+
+CONFIG[1]{key, value}:
+  base_url, ${GATEWAY_URL:-http://localhost:8080}
+
+API[3]{method, endpoint, expected_status, body}:
+  GET, /health, 200, -
+  POST, /api/cells/customer.validate, 200, {"name": "Jan Kowalski", "email": "  Jan.Kowalski@Example.COM ", "country": "pl"}
+  POST, /api/cells/customer.validate, 200, {"name": "", "email": "nope", "country": "PLN"}
+
+ASSERT[3]{field, operator, expected}:
+  output.valid, ==, false
+  output.normalized_email, ==, "nope"
+  output.country, ==, "PLN"

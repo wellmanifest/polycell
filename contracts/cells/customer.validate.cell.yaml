@@ -1,0 +1,29 @@
+schema: wellmanifest.polycell.cell/v1
+urn: urn:wm:cell:shop:customer.validate:v1
+name: customer.validate
+version: 1.0.0
+owner: python
+summary: Waliduje i normalizuje dane klienta
+effects: [pure]
+input:
+  name: string
+  email: string
+  country: string
+output:
+  valid: bool
+  errors: string[]
+  normalized_email: string
+  country: string
+persist:
+  table: customer_checks
+nl:
+  pl: ["sprawdź klienta", "waliduj email", "zweryfikuj klienta"]
+  en: ["validate customer", "check email"]
+menu: {category: Klienci, label: Sprawdź klienta, icon: user-check, interactionType: modal_form}
+examples:
+  - name: ok
+    input: {name: "Jan Kowalski", email: "  Jan.Kowalski@Example.COM ", country: pl}
+    output: {valid: true, errors: [], normalized_email: jan.kowalski@example.com, country: PL}
+  - name: bad
+    input: {name: "", email: "nope", country: PLN}
+    output: {valid: false, errors: [name_required, email_invalid, country_invalid], normalized_email: nope, country: PLN}

@@ -1,0 +1,33 @@
+[
+  {
+    "name": "happy",
+    "input": {
+      "customer": {
+        "name": "Jan",
+        "email": "JAN@EXAMPLE.COM",
+        "country": "pl"
+      },
+      "cart": {
+        "items": [
+          {
+            "sku": "A1",
+            "qty": 2,
+            "unit_price": 50.0
+          },
+          {
+            "sku": "B2",
+            "qty": 1,
+            "unit_price": 100.0
+          }
+        ],
+        "currency": "PLN",
+        "coupon": "AI10"
+      },
+      "lang": "pl"
+    },
+    "expect": {
+      "quote.total": 221.4,
+      "message.subject": "Potwierdzenie zamówienia: 221.40 PLN"
+    }
+  }
+]

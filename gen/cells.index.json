@@ -1,0 +1,462 @@
+{
+  "cells": {
+    "urn:wm:cell:shop:customer.validate:v1": {
+      "name": "customer.validate",
+      "owner": "python",
+      "contract": "021800618efc",
+      "persist": "customer_checks",
+      "nl": {
+        "pl": [
+          "sprawdź klienta",
+          "waliduj email",
+          "zweryfikuj klienta"
+        ],
+        "en": [
+          "validate customer",
+          "check email"
+        ]
+      },
+      "menu": {
+        "category": "Klienci",
+        "label": "Sprawdź klienta",
+        "icon": "user-check",
+        "interactionType": "modal_form"
+      },
+      "summary": "Waliduje i normalizuje dane klienta",
+      "examples": [
+        {
+          "name": "ok",
+          "input": {
+            "name": "Jan Kowalski",
+            "email": "  Jan.Kowalski@Example.COM ",
+            "country": "pl"
+          },
+          "output": {
+            "valid": true,
+            "errors": [],
+            "normalized_email": "jan.kowalski@example.com",
+            "country": "PL"
+          }
+        },
+        {
+          "name": "bad",
+          "input": {
+            "name": "",
+            "email": "nope",
+            "country": "PLN"
+          },
+          "output": {
+            "valid": false,
+            "errors": [
+              "name_required",
+              "email_invalid",
+              "country_invalid"
+            ],
+            "normalized_email": "nope",
+            "country": "PLN"
+          }
+        }
+      ],
+      "input": {
+        "name": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        },
+        "email": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        },
+        "country": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        }
+      },
+      "output": {
+        "valid": {
+          "base": "bool",
+          "is_list": false,
+          "optional": false
+        },
+        "errors": {
+          "base": "string",
+          "is_list": true,
+          "optional": false
+        },
+        "normalized_email": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        },
+        "country": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        }
+      }
+    },
+    "urn:wm:cell:shop:notify.render:v1": {
+      "name": "notify.render",
+      "owner": "ts",
+      "contract": "f4ff80f6c235",
+      "persist": null,
+      "nl": {
+        "pl": [
+          "przygotuj powiadomienie",
+          "wygeneruj wiadomość"
+        ],
+        "en": [
+          "render notification"
+        ]
+      },
+      "menu": {
+        "category": "Komunikacja",
+        "label": "Podgląd powiadomienia",
+        "icon": "mail",
+        "interactionType": "modal_form"
+      },
+      "summary": "Renderuje treść powiadomienia o zamówieniu (PL/EN)",
+      "examples": [
+        {
+          "name": "pl",
+          "input": {
+            "customer_name": "Jan",
+            "total": 221.4,
+            "currency": "PLN",
+            "lang": "pl"
+          },
+          "output": {
+            "subject": "Potwierdzenie zamówienia: 221.40 PLN",
+            "body": "Dzień dobry Jan, Twoje zamówienie na kwotę 221.40 PLN zostało przyjęte."
+          }
+        },
+        {
+          "name": "en",
+          "input": {
+            "customer_name": "Ann",
+            "total": 36.26,
+            "currency": "EUR",
+            "lang": "en"
+          },
+          "output": {
+            "subject": "Order confirmation: 36.26 EUR",
+            "body": "Hello Ann, your order for 36.26 EUR has been accepted."
+          }
+        }
+      ],
+      "input": {
+        "customer_name": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        },
+        "total": {
+          "base": "double",
+          "is_list": false,
+          "optional": false
+        },
+        "currency": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        },
+        "lang": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        }
+      },
+      "output": {
+        "subject": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        },
+        "body": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        }
+      }
+    },
+    "urn:wm:cell:shop:pricing.quote:v1": {
+      "name": "pricing.quote",
+      "owner": "rust",
+      "contract": "db6ace1e979b",
+      "persist": "quotes",
+      "nl": {
+        "pl": [
+          "wycena koszyka",
+          "policz cenę",
+          "ile kosztuje koszyk"
+        ],
+        "en": [
+          "quote cart",
+          "price basket"
+        ]
+      },
+      "menu": {
+        "category": "Sprzedaż",
+        "group": "Wyceny",
+        "label": "Wyceń koszyk",
+        "icon": "calculator",
+        "interactionType": "modal_form"
+      },
+      "summary": "Oblicza wycenę koszyka (suma, rabat z kuponu, VAT, razem)",
+      "examples": [
+        {
+          "name": "pln_with_coupon",
+          "input": {
+            "items": [
+              {
+                "sku": "A1",
+                "qty": 2,
+                "unit_price": 50.0
+              },
+              {
+                "sku": "B2",
+                "qty": 1,
+                "unit_price": 100.0
+              }
+            ],
+            "currency": "PLN",
+            "coupon": "AI10"
+          },
+          "output": {
+            "subtotal": 200.0,
+            "discount": 20.0,
+            "tax": 41.4,
+            "total": 221.4,
+            "currency": "PLN"
+          }
+        },
+        {
+          "name": "eur_no_coupon",
+          "input": {
+            "items": [
+              {
+                "sku": "X",
+                "qty": 3,
+                "unit_price": 9.99
+              }
+            ],
+            "currency": "EUR"
+          },
+          "output": {
+            "subtotal": 29.97,
+            "discount": 0.0,
+            "tax": 6.29,
+            "total": 36.26,
+            "currency": "EUR"
+          }
+        }
+      ],
+      "input": {
+        "items": {
+          "base": "LineItem",
+          "is_list": true,
+          "optional": false
+        },
+        "currency": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        },
+        "coupon": {
+          "base": "string",
+          "is_list": false,
+          "optional": true
+        }
+      },
+      "output": {
+        "subtotal": {
+          "base": "double",
+          "is_list": false,
+          "optional": false
+        },
+        "discount": {
+          "base": "double",
+          "is_list": false,
+          "optional": false
+        },
+        "tax": {
+          "base": "double",
+          "is_list": false,
+          "optional": false
+        },
+        "total": {
+          "base": "double",
+          "is_list": false,
+          "optional": false
+        },
+        "currency": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        }
+      }
+    },
+    "urn:wm:cell:shop:shipping.cost:v1": {
+      "name": "shipping.cost",
+      "owner": "python",
+      "contract": "e41ae88b5509",
+      "persist": null,
+      "nl": {
+        "pl": [
+          "shipping cost"
+        ],
+        "en": [
+          "shipping cost"
+        ]
+      },
+      "menu": {
+        "category": "Legacy",
+        "label": "shipping_cost",
+        "interactionType": "modal_form"
+      },
+      "summary": "Koszt wysyłki wg starego cennika",
+      "examples": [
+        {
+          "name": "pl_light",
+          "input": {
+            "weight_kg": 3,
+            "country": "PL"
+          },
+          "output": {
+            "result": 9.99
+          }
+        }
+      ],
+      "input": {
+        "weight_kg": {
+          "base": "double",
+          "is_list": false,
+          "optional": false
+        },
+        "country": {
+          "base": "string",
+          "is_list": false,
+          "optional": false
+        }
+      },
+      "output": {
+        "result": {
+          "base": "double",
+          "is_list": false,
+          "optional": false
+        }
+      }
+    }
+  },
+  "processes": {
+    "checkout": {
+      "schema": "poa.process/v1",
+      "process_ref": "poa://shop.local/process/checkout/v1",
+      "title": "Checkout - walidacja klienta, wycena, powiadomienie",
+      "owner": "service:gateway",
+      "input": {
+        "customer": {
+          "name": "string",
+          "email": "string",
+          "country": "string"
+        },
+        "cart": {
+          "items": "LineItem[]",
+          "currency": "string",
+          "coupon": "string?"
+        },
+        "lang": "string"
+      },
+      "steps": [
+        {
+          "id": "validate",
+          "capability_ref": "urn:wm:cell:shop:customer.validate:v1",
+          "kind": "query",
+          "effects": [
+            "read_data"
+          ],
+          "depends_on": [],
+          "input": {
+            "name": "$.customer.name",
+            "email": "$.customer.email",
+            "country": "$.customer.country"
+          },
+          "guard": "$.steps.validate.valid == true"
+        },
+        {
+          "id": "quote",
+          "capability_ref": "urn:wm:cell:shop:pricing.quote:v1",
+          "kind": "query",
+          "effects": [
+            "read_data"
+          ],
+          "depends_on": [
+            "validate"
+          ],
+          "input": {
+            "items": "$.cart.items",
+            "currency": "$.cart.currency",
+            "coupon": "$.cart.coupon"
+          }
+        },
+        {
+          "id": "notify",
+          "capability_ref": "urn:wm:cell:shop:notify.render:v1",
+          "kind": "command",
+          "effects": [
+            "local_write"
+          ],
+          "depends_on": [
+            "quote"
+          ],
+          "input": {
+            "customer_name": "$.customer.name",
+            "total": "$.steps.quote.total",
+            "currency": "$.steps.quote.currency",
+            "lang": "$.lang"
+          }
+        }
+      ],
+      "output": {
+        "customer": "$.steps.validate",
+        "quote": "$.steps.quote",
+        "message": "$.steps.notify"
+      },
+      "examples": [
+        {
+          "name": "happy",
+          "input": {
+            "customer": {
+              "name": "Jan",
+              "email": "JAN@EXAMPLE.COM",
+              "country": "pl"
+            },
+            "cart": {
+              "items": [
+                {
+                  "sku": "A1",
+                  "qty": 2,
+                  "unit_price": 50.0
+                },
+                {
+                  "sku": "B2",
+                  "qty": 1,
+                  "unit_price": 100.0
+                }
+              ],
+              "currency": "PLN",
+              "coupon": "AI10"
+            },
+            "lang": "pl"
+          },
+          "expect": {
+            "quote.total": 221.4,
+            "message.subject": "Potwierdzenie zamówienia: 221.40 PLN"
+          }
+        }
+      ]
+    }
+  }
+}

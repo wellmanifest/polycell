@@ -1,0 +1,21 @@
+# Scenariusz UI digital twin: proces POA, paleta NL, walidacja kontraktu, logi
+GOTO /
+WAIT [data-testid=menu-process-checkout]
+CLICK [data-testid=menu-process-checkout]
+CLICK [data-testid=run]
+WAIT_TEXT [data-testid=result] "221.4"
+ASSERT_TEXT [data-testid=result] "poa.receipt/v1"
+SCREENSHOT 01-checkout.png
+TYPE [data-testid=palette] "policz cenę koszyka"
+PRESS Enter
+WAIT [data-testid=in-currency]
+SELECT [data-testid=transport] "http"
+CLICK [data-testid=run]
+WAIT_TEXT [data-testid=result] "\"total\": 221.4"
+ASSERT_TEXT [data-testid=result] "\"transport\": \"http\""
+CLICK [data-testid="menu-customer.validate"]
+TYPE [data-testid=in-email] "not-an-email"
+CLICK [data-testid=run]
+WAIT_TEXT [data-testid=result] "email_invalid"
+SCREENSHOT 02-validation.png
+CONSOLE_ERRORS 0

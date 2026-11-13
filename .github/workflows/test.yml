@@ -1,0 +1,42 @@
+name: Test polycell
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            hosts/ts/package-lock.json
+            db/pglite/package-lock.json
+      - run: make install
+      - run: make check
+      - run: make dev
+      - run: make parity
+      - run: make testql
+      - run: make test
+      - run: make integration
+      - run: make chrome
+      - run: |
+          curl --fail --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:9222/json/version
+          make cdp
+      - if: failure()
+        run: make diag
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: digital-twin
+          path: |
+            artifacts/twin
+            .run/logs
+      - if: always()
+        run: make stop

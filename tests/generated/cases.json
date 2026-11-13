@@ -1,0 +1,178 @@
+[
+  {
+    "urn": "urn:wm:cell:shop:customer.validate:v1",
+    "name": "customer.validate:ok",
+    "owner": "python",
+    "input": {
+      "name": "Jan Kowalski",
+      "email": "  Jan.Kowalski@Example.COM ",
+      "country": "pl"
+    },
+    "output": {
+      "valid": true,
+      "errors": [],
+      "normalized_email": "jan.kowalski@example.com",
+      "country": "PL"
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:customer.validate:v1",
+    "name": "customer.validate:bad",
+    "owner": "python",
+    "input": {
+      "name": "",
+      "email": "nope",
+      "country": "PLN"
+    },
+    "output": {
+      "valid": false,
+      "errors": [
+        "name_required",
+        "email_invalid",
+        "country_invalid"
+      ],
+      "normalized_email": "nope",
+      "country": "PLN"
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:notify.render:v1",
+    "name": "notify.render:pl",
+    "owner": "ts",
+    "input": {
+      "customer_name": "Jan",
+      "total": 221.4,
+      "currency": "PLN",
+      "lang": "pl"
+    },
+    "output": {
+      "subject": "Potwierdzenie zamówienia: 221.40 PLN",
+      "body": "Dzień dobry Jan, Twoje zamówienie na kwotę 221.40 PLN zostało przyjęte."
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:notify.render:v1",
+    "name": "notify.render:en",
+    "owner": "ts",
+    "input": {
+      "customer_name": "Ann",
+      "total": 36.26,
+      "currency": "EUR",
+      "lang": "en"
+    },
+    "output": {
+      "subject": "Order confirmation: 36.26 EUR",
+      "body": "Hello Ann, your order for 36.26 EUR has been accepted."
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:pricing.quote:v1",
+    "name": "pricing.quote:pln_with_coupon",
+    "owner": "rust",
+    "input": {
+      "items": [
+        {
+          "sku": "A1",
+          "qty": 2,
+          "unit_price": 50.0
+        },
+        {
+          "sku": "B2",
+          "qty": 1,
+          "unit_price": 100.0
+        }
+      ],
+      "currency": "PLN",
+      "coupon": "AI10"
+    },
+    "output": {
+      "subtotal": 200.0,
+      "discount": 20.0,
+      "tax": 41.4,
+      "total": 221.4,
+      "currency": "PLN"
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:pricing.quote:v1",
+    "name": "pricing.quote:eur_no_coupon",
+    "owner": "rust",
+    "input": {
+      "items": [
+        {
+          "sku": "X",
+          "qty": 3,
+          "unit_price": 9.99
+        }
+      ],
+      "currency": "EUR"
+    },
+    "output": {
+      "subtotal": 29.97,
+      "discount": 0.0,
+      "tax": 6.29,
+      "total": 36.26,
+      "currency": "EUR"
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:shipping.cost:v1",
+    "name": "shipping.cost:pl_light",
+    "owner": "python",
+    "input": {
+      "weight_kg": 3,
+      "country": "PL"
+    },
+    "output": {
+      "result": 9.99
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:shipping.cost:v1",
+    "name": "shipping.cost:golden0",
+    "owner": "python",
+    "input": {
+      "country": "PL",
+      "weight_kg": 3
+    },
+    "output": {
+      "result": 9.99
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:shipping.cost:v1",
+    "name": "shipping.cost:golden1",
+    "owner": "python",
+    "input": {
+      "country": "PL",
+      "weight_kg": 8
+    },
+    "output": {
+      "result": 19.99
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:shipping.cost:v1",
+    "name": "shipping.cost:golden2",
+    "owner": "python",
+    "input": {
+      "country": "DE",
+      "weight_kg": 2
+    },
+    "output": {
+      "result": 29.99
+    }
+  },
+  {
+    "urn": "urn:wm:cell:shop:shipping.cost:v1",
+    "name": "shipping.cost:golden3",
+    "owner": "python",
+    "input": {
+      "country": "US",
+      "weight_kg": 12.5
+    },
+    "output": {
+      "result": 49.99
+    }
+  }
+]

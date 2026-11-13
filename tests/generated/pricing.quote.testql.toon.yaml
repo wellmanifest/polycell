@@ -1,0 +1,18 @@
+# SCENARIO: pricing.quote contract
+# TYPE: api
+# GENERATED: true
+
+CONFIG[1]{key, value}:
+  base_url, ${GATEWAY_URL:-http://localhost:8080}
+
+API[3]{method, endpoint, expected_status, body}:
+  GET, /health, 200, -
+  POST, /api/cells/pricing.quote, 200, {"items": [{"sku": "A1", "qty": 2, "unit_price": 50.0}, {"sku": "B2", "qty": 1, "unit_price": 100.0}], "currency": "PLN", "coupon": "AI10"}
+  POST, /api/cells/pricing.quote, 200, {"items": [{"sku": "X", "qty": 3, "unit_price": 9.99}], "currency": "EUR"}
+
+ASSERT[5]{field, operator, expected}:
+  output.subtotal, ==, 29.97
+  output.discount, ==, 0.0
+  output.tax, ==, 6.29
+  output.total, ==, 36.26
+  output.currency, ==, "EUR"

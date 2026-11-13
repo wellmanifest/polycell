@@ -1,0 +1,42 @@
+# Kontrakt komórki (SSOT). Z tego pliku generowane są: proto, registry, SQL, typy TS/Py/Rust,
+# JSON Schema, OpenAPI, narzędzia MCP i scenariusze testql. Logikę piszemy/generujemy osobno.
+schema: wellmanifest.polycell.cell/v1
+urn: urn:wm:cell:shop:pricing.quote:v1
+name: pricing.quote
+version: 1.0.0
+owner: rust                 # język, w którym żyje implementacja (python | ts | rust)
+summary: Oblicza wycenę koszyka (suma, rabat z kuponu, VAT, razem)
+effects: [pure]             # pure | read_data | write_data | external (POA effects)
+types:
+  LineItem:
+    sku: string
+    qty: int32
+    unit_price: double
+input:
+  items: LineItem[]
+  currency: string
+  coupon: string?
+output:
+  subtotal: double
+  discount: double
+  tax: double
+  total: double
+  currency: string
+persist:
+  table: quotes             # projekcja wejścia+wyjścia do tabeli SQL (generowana)
+nl:
+  pl: ["wycena koszyka", "policz cenę", "ile kosztuje koszyk"]
+  en: ["quote cart", "price basket"]
+menu: {category: Sprzedaż, group: Wyceny, label: Wyceń koszyk, icon: calculator, interactionType: modal_form}
+examples:
+  - name: pln_with_coupon
+    input:
+      items: [{sku: A1, qty: 2, unit_price: 50.0}, {sku: B2, qty: 1, unit_price: 100.0}]
+      currency: PLN
+      coupon: AI10
+    output: {subtotal: 200.0, discount: 20.0, tax: 41.4, total: 221.4, currency: PLN}
+  - name: eur_no_coupon
+    input:
+      items: [{sku: X, qty: 3, unit_price: 9.99}]
+      currency: EUR
+    output: {subtotal: 29.97, discount: 0.0, tax: 6.29, total: 36.26, currency: EUR}

@@ -1,0 +1,15 @@
+# SCENARIO: notify.render contract
+# TYPE: api
+# GENERATED: true
+
+CONFIG[1]{key, value}:
+  base_url, ${GATEWAY_URL:-http://localhost:8080}
+
+API[3]{method, endpoint, expected_status, body}:
+  GET, /health, 200, -
+  POST, /api/cells/notify.render, 200, {"customer_name": "Jan", "total": 221.4, "currency": "PLN", "lang": "pl"}
+  POST, /api/cells/notify.render, 200, {"customer_name": "Ann", "total": 36.26, "currency": "EUR", "lang": "en"}
+
+ASSERT[2]{field, operator, expected}:
+  output.subject, ==, "Order confirmation: 36.26 EUR"
+  output.body, ==, "Hello Ann, your order for 36.26 EUR has been accepted."

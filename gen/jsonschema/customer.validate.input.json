@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wm:cell:shop:customer.validate:v1#input",
+  "title": "CustomerValidateInput",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "email",
+    "country"
+  ],
+  "$defs": {
+    "LineItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sku": {
+          "type": "string"
+        },
+        "qty": {
+          "type": "integer"
+        },
+        "unit_price": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sku",
+        "qty",
+        "unit_price"
+      ]
+    }
+  }
+}

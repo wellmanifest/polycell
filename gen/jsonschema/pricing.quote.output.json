@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:wm:cell:shop:pricing.quote:v1#output",
+  "title": "PricingQuoteOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "subtotal": {
+      "type": "number"
+    },
+    "discount": {
+      "type": "number"
+    },
+    "tax": {
+      "type": "number"
+    },
+    "total": {
+      "type": "number"
+    },
+    "currency": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "subtotal",
+    "discount",
+    "tax",
+    "total",
+    "currency"
+  ],
+  "$defs": {
+    "LineItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sku": {
+          "type": "string"
+        },
+        "qty": {
+          "type": "integer"
+        },
+        "unit_price": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "sku",
+        "qty",
+        "unit_price"
+      ]
+    }
+  }
+}

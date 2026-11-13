@@ -1,0 +1,10 @@
+{
+  "name": "polycell-pglite",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node server.mjs" },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@electric-sql/pglite-socket": "^0.0.15"
+  }
+}

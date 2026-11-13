@@ -1,0 +1,93 @@
+name: polycell
+
+x-py: &py
+  build:
+    context: .
+    dockerfile: docker/python.Dockerfile
+    additional_contexts:
+      ts_host: service:host-ts
+      rust_host: service:host-rust
+  image: polycell/python:dev
+
+services:
+  # --- dane: Postgres jako proces aplikacyjny (PGlite/WASM), dane w wolumenie jak plik SQLite
+  db:
+    build: { context: ., dockerfile: docker/pglite.Dockerfile }
+    volumes: [pgdata:/data]
+    healthcheck: { test: ["CMD", "node", "-e", "require('net').connect(5432,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"], interval: 3s, retries: 20 }
+
+  # --- hosty komórek: każdy język osobno, ten sam niezmienny kontrakt polycell.v1.CellHost
+  host-python:
+    <<: *py
+    command: ["python", "hosts/python/host.py"]
+    volumes: ["./cells/python:/app/cells/python:ro"]     # hot-reload: podmień plik komórki i gotowe
+    environment: { HTTP_PORT: 8101, GRPC_PORT: 9101 }
+  host-ts:
+    build: { context: ., dockerfile: docker/ts.Dockerfile }
+    volumes: ["./cells/ts:/app/cells/ts:ro"]
+    environment: { HTTP_PORT: 8102, GRPC_PORT: 9102 }
+  host-rust:
+    build: { context: ., dockerfile: docker/rust.Dockerfile }
+    environment: { HTTP_PORT: 8103, GRPC_PORT: 9103 }
+
+  # --- gateway: REST + UI + NL + POA + MCP + zapis do DB + diagnostyka
+  gateway:
+    <<: *py
+    command: ["python", "-m", "gateway.app"]
+    ports: ["${APP_PORT:-8080}:8080"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      db: { condition: service_healthy }
+      host-python: { condition: service_started }
+      host-ts: { condition: service_started }
+      host-rust: { condition: service_started }
+    environment:
+      WM_DB: postgresql://postgres:postgres@db:5432/postgres?sslmode=disable
+      WM_TRANSPORT: ${WM_TRANSPORT:-grpc}
+      HOST_PYTHON_HTTP: http://host-python:8101
+      HOST_PYTHON_GRPC: host-python:9101
+      HOST_TS_HTTP: http://host-ts:8102
+      HOST_TS_GRPC: host-ts:9102
+      HOST_RUST_HTTP: http://host-rust:8103
+      HOST_RUST_GRPC: host-rust:9103
+      COMPOSE_PROJECT_NAME: polycell
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro      # /api/logs: logi wszystkich kontenerów projektu
+
+  # --- digital twin / sandbox (profil: twin)
+  chrome:
+    profiles: [twin]
+    image: chromedp/headless-shell:latest
+    ports: ["${CHROME_PORT:-9222}:9222"]                   # CDP dostępne także z hosta (np. dla agenta AI)
+  twin:
+    profiles: [twin]
+    build: { context: ., dockerfile: docker/ts.Dockerfile }
+    depends_on: [gateway, chrome]
+    environment: { CDP_URL: "http://chrome:9222", APP_URL: "http://gateway:8080", ARTIFACTS: /app/artifacts/twin }
+    volumes: ["./artifacts:/app/artifacts", "./twin:/app/twin:ro"]
+    command: ["sh", "-c", "sleep 3 && node --experimental-strip-types twin/cdp.ts twin/scenarios/*.cdp.tql"]
+  testql:
+    profiles: [twin]
+    <<: *py
+    depends_on: [gateway]
+    command: ["sh", "-c", "sleep 3 && python twin/testql_runner.py tests/generated/*.testql.toon.yaml --url http://gateway:8080"]
+    volumes: ["./twin:/app/twin:ro", "./tests:/app/tests:ro"]
+  logs:
+    profiles: [twin]
+    image: amir20/dozzle:latest                           # podgląd logów wszystkich kontenerów w przeglądarce
+    ports: ["8888:8080"]
+    volumes: ["/var/run/docker.sock:/var/run/docker.sock:ro"]
+
+  # --- alternatywa: klasyczny serwer Postgres (profil: pgserver), gdy potrzebne wiele połączeń
+  postgres:
+    profiles: [pgserver]
+    image: postgres:17-alpine
+    environment: { POSTGRES_PASSWORD: postgres }
+    ports: ["5432:5432"]
+
+volumes:
+  pgdata:

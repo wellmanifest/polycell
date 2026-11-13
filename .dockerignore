@@ -1,0 +1,10 @@
+.git
+.venv
+.run
+.env
+.env.*
+artifacts
+**/node_modules
+**/target
+**/__pycache__
+**/*.pyc

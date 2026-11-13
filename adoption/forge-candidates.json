@@ -1,0 +1,475 @@
+{
+  "source": "/mnt/user-data/uploads/ae507fc5-map.toon.yaml",
+  "header": [
+    "# forge | 4456f 1287084L | python:4378,rust:73,shell:4,less:1 | 2026-11-13",
+    "# stats: 14262 func | 9665 cls | 4456 mod | CC̄=5.7 | critical:2359 | cycles:0",
+    "# alerts[5]: CC validate_https___setuptools_pypa_io_en_latest_userguide_pyproject_config_html=352; CC validate_https___packaging_python_org_en_latest_specifications_pyproject_toml=287; CC validate_https___setuptools_pypa_io_en_latest_userguide_pyproject_config_html__definitions_ext_module=170; fan-out _execute=72; fan-out _execute=70",
+    "# hotspots[5]: _execute fan=72; _execute fan=72; _execute fan=72; _execute fan=72; _execute fan=70",
+    "# evolution: baseline",
+    "# Keys: M=modules, D=details, i=imports, e=exports, c=classes, f=functions, m=methods"
+  ],
+  "functions_seen": 3145,
+  "candidates": [
+    {
+      "file": ".governance/branch_intent_reconciliation.py",
+      "function": "digest",
+      "args": [
+        "value",
+        "length"
+      ],
+      "module_lines": 220,
+      "score": 4.0,
+      "suggested_cell": "branch_intent_reconciliation.digest",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/branch_intent_reconciliation.py",
+      "function": "parse_json",
+      "args": [
+        "content"
+      ],
+      "module_lines": 220,
+      "score": 4.0,
+      "suggested_cell": "branch_intent_reconciliation.parse_json",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/branch_intent_reconciliation.py",
+      "function": "reconcile",
+      "args": [
+        "report",
+        "observation",
+        "evidence_root"
+      ],
+      "module_lines": 220,
+      "score": 4.0,
+      "suggested_cell": "branch_intent_reconciliation.reconcile",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/branch_lifecycle_check.py",
+      "function": "parse_snapshot_pulls",
+      "args": [
+        "pulls_value"
+      ],
+      "module_lines": 257,
+      "score": 4.0,
+      "suggested_cell": "branch_lifecycle_check.parse_snapshot_pulls",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/branch_lifecycle_check.py",
+      "function": "parse_snapshot",
+      "args": [
+        "value",
+        "expected_repository"
+      ],
+      "module_lines": 257,
+      "score": 4.0,
+      "suggested_cell": "branch_lifecycle_check.parse_snapshot",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/branch_lifecycle_check.py",
+      "function": "evaluate",
+      "args": [
+        "snapshot",
+        "focus_branch"
+      ],
+      "module_lines": 257,
+      "score": 4.0,
+      "suggested_cell": "branch_lifecycle_check.evaluate",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/change_lease_check.py",
+      "function": "validate_publication_lease_fields",
+      "args": [
+        "value",
+        "phase",
+        "errors"
+      ],
+      "module_lines": 504,
+      "score": 4.0,
+      "suggested_cell": "change_lease_check.validate_publication_lease_fields",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/change_lease_check.py",
+      "function": "validate_lease",
+      "args": [
+        "value"
+      ],
+      "module_lines": 504,
+      "score": 4.0,
+      "suggested_cell": "change_lease_check.validate_lease",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/change_lease_check.py",
+      "function": "validate_request",
+      "args": [
+        "value"
+      ],
+      "module_lines": 504,
+      "score": 4.0,
+      "suggested_cell": "change_lease_check.validate_request",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/check_required_checks.py",
+      "function": "resolve_source",
+      "args": [
+        "root",
+        "script_path"
+      ],
+      "module_lines": 367,
+      "score": 4.0,
+      "suggested_cell": "check_required_checks.resolve_source",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/check_required_checks.py",
+      "function": "compare",
+      "args": [
+        "required",
+        "published"
+      ],
+      "module_lines": 367,
+      "score": 4.0,
+      "suggested_cell": "check_required_checks.compare",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/decision_record.py",
+      "function": "classify_action",
+      "args": [
+        "action"
+      ],
+      "module_lines": 508,
+      "score": 4.0,
+      "suggested_cell": "decision_record.classify_action",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/decision_record.py",
+      "function": "parse_value",
+      "args": [
+        "raw"
+      ],
+      "module_lines": 508,
+      "score": 4.0,
+      "suggested_cell": "decision_record.parse_value",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/decision_record.py",
+      "function": "format_value",
+      "args": [
+        "value"
+      ],
+      "module_lines": 508,
+      "score": 4.0,
+      "suggested_cell": "decision_record.format_value",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/generate_required_checks.py",
+      "function": "resolved_checks_text",
+      "args": [
+        "text",
+        "sources",
+        "callers"
+      ],
+      "module_lines": 568,
+      "score": 4.0,
+      "suggested_cell": "generate_required_checks.resolved_checks_text",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/policy_dsl_check.py",
+      "function": "extract_markdown",
+      "args": [
+        "source"
+      ],
+      "module_lines": 1202,
+      "score": 4.0,
+      "suggested_cell": "policy_dsl_check.extract_markdown",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/policy_dsl_check.py",
+      "function": "parse_expression",
+      "args": [
+        "text",
+        "line"
+      ],
+      "module_lines": 1202,
+      "score": 4.0,
+      "suggested_cell": "policy_dsl_check.parse_expression",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/policy_dsl_check.py",
+      "function": "parse_condition",
+      "args": [
+        "text",
+        "line"
+      ],
+      "module_lines": 1202,
+      "score": 4.0,
+      "suggested_cell": "policy_dsl_check.parse_condition",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/repository_policy.py",
+      "function": "selected_policy",
+      "args": [
+        "manifest"
+      ],
+      "module_lines": 471,
+      "score": 4.0,
+      "suggested_cell": "repository_policy.selected_policy",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/seed_baseline.py",
+      "function": "digest",
+      "args": [
+        "raw"
+      ],
+      "module_lines": 274,
+      "score": 4.0,
+      "suggested_cell": "seed_baseline.digest",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/seed_baseline.py",
+      "function": "canonical",
+      "args": [
+        "value"
+      ],
+      "module_lines": 274,
+      "score": 4.0,
+      "suggested_cell": "seed_baseline.canonical",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/snapshot_migration.py",
+      "function": "digest",
+      "args": [
+        "value"
+      ],
+      "module_lines": 283,
+      "score": 4.0,
+      "suggested_cell": "snapshot_migration.digest",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/snapshot_migration.py",
+      "function": "matches",
+      "args": [
+        "pattern",
+        "value"
+      ],
+      "module_lines": 283,
+      "score": 4.0,
+      "suggested_cell": "snapshot_migration.matches",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/terminal_lease_release.py",
+      "function": "decode",
+      "args": [
+        "raw"
+      ],
+      "module_lines": 325,
+      "score": 4.0,
+      "suggested_cell": "terminal_lease_release.decode",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/terminal_lease_release.py",
+      "function": "encoded",
+      "args": [
+        "value"
+      ],
+      "module_lines": 325,
+      "score": 4.0,
+      "suggested_cell": "terminal_lease_release.encoded",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_activity.py",
+      "function": "parse_ticket_state_text",
+      "args": [
+        "text"
+      ],
+      "module_lines": 888,
+      "score": 4.0,
+      "suggested_cell": "ticket_activity.parse_ticket_state_text",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_activity.py",
+      "function": "resolve",
+      "args": [
+        "root",
+        "ticket_dir",
+        "active_statuses"
+      ],
+      "module_lines": 888,
+      "score": 4.0,
+      "suggested_cell": "ticket_activity.resolve",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_allocation.py",
+      "function": "parse_config",
+      "args": [
+        "path"
+      ],
+      "module_lines": 250,
+      "score": 4.0,
+      "suggested_cell": "ticket_allocation.parse_config",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_allocation.py",
+      "function": "canonical_repository_ref",
+      "args": [
+        "url"
+      ],
+      "module_lines": 250,
+      "score": 4.0,
+      "suggested_cell": "ticket_allocation.canonical_repository_ref",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_allocation.py",
+      "function": "canonical_digest",
+      "args": [
+        "value"
+      ],
+      "module_lines": 250,
+      "score": 4.0,
+      "suggested_cell": "ticket_allocation.canonical_digest",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_index_merge_driver.py",
+      "function": "extract_table_rows",
+      "args": [
+        "content"
+      ],
+      "module_lines": 179,
+      "score": 4.0,
+      "suggested_cell": "ticket_index_merge_driver.extract_table_rows",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_index_merge_driver.py",
+      "function": "parse_ticket_rows",
+      "args": [
+        "lines"
+      ],
+      "module_lines": 179,
+      "score": 4.0,
+      "suggested_cell": "ticket_index_merge_driver.parse_ticket_rows",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_index_merge_driver.py",
+      "function": "merge_ticket_index_content",
+      "args": [
+        "ancestor_text",
+        "current_text",
+        "other_text"
+      ],
+      "module_lines": 179,
+      "score": 4.0,
+      "suggested_cell": "ticket_index_merge_driver.merge_ticket_index_content",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_input.py",
+      "function": "parse_json",
+      "args": [
+        "data"
+      ],
+      "module_lines": 263,
+      "score": 4.0,
+      "suggested_cell": "ticket_input.parse_json",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_input.py",
+      "function": "validate_document_contract",
+      "args": [
+        "doc",
+        "ticket"
+      ],
+      "module_lines": 263,
+      "score": 4.0,
+      "suggested_cell": "ticket_input.validate_document_contract",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_input.py",
+      "function": "validate_ticket_path",
+      "args": [
+        "name"
+      ],
+      "module_lines": 263,
+      "score": 4.0,
+      "suggested_cell": "ticket_input.validate_ticket_path",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/ticket_restoration.py",
+      "function": "validate_request",
+      "args": [
+        "request",
+        "workstream"
+      ],
+      "module_lines": 291,
+      "score": 4.0,
+      "suggested_cell": "ticket_restoration.validate_request",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/work_continuity.py",
+      "function": "canonical_bytes",
+      "args": [
+        "value"
+      ],
+      "module_lines": 1427,
+      "score": 4.0,
+      "suggested_cell": "work_continuity.canonical_bytes",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/work_continuity.py",
+      "function": "canonical_digest",
+      "args": [
+        "value"
+      ],
+      "module_lines": 1427,
+      "score": 4.0,
+      "suggested_cell": "work_continuity.canonical_digest",
+      "owner": "python"
+    },
+    {
+      "file": ".governance/work_continuity.py",
+      "function": "validate_repository",
+      "args": [
+        "value",
+        "label"
+      ],
+      "module_lines": 1427,
+      "score": 4.0,
+      "suggested_cell": "work_continuity.validate_repository",
+      "owner": "python"
+    }
+  ]
+}

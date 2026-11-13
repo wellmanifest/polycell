@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wellmanifest.com/schemas/polycell/polycell-cell.schema.v1.json",
+  "title": "PolycellCellContract",
+  "description": "Kontrakt komórki logiki (SSOT). Z niego generowane są wszystkie interfejsy; implementacja jest jednym plikiem.",
+  "type": "object",
+  "required": ["schema", "urn", "name", "version", "owner", "input", "output"],
+  "additionalProperties": false,
+  "$defs": {
+    "typeRef": {
+      "type": "string",
+      "description": "string|int32|int64|double|bool|json|<TypeName>, sufiks [] = lista, sufiks ? = opcjonalne",
+      "pattern": "^(string|int32|int64|double|bool|json|[A-Z][A-Za-z0-9]*)(\\[\\])?\\??$"
+    },
+    "fields": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+      "additionalProperties": { "$ref": "#/$defs/typeRef" }
+    }
+  },
+  "properties": {
+    "schema": { "const": "wellmanifest.polycell.cell/v1" },
+    "urn": { "type": "string", "pattern": "^urn:wm:cell:[a-z0-9_-]+:[a-z0-9_.]+:v[0-9]+$" },
+    "name": { "type": "string", "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "owner": { "enum": ["python", "ts", "rust"] },
+    "summary": { "type": "string" },
+    "effects": {
+      "type": "array",
+      "items": { "enum": ["pure", "read_data", "write_data", "local_write", "external", "credential_use"] },
+      "description": "Efekty w sensie POA; tylko [pure] dopuszcza regenerację bez przeglądu bezpieczeństwa."
+    },
+    "impl": { "enum": ["cell", "legacy"], "default": "cell" },
+    "replaces": { "type": "array", "items": { "type": "string", "pattern": "^[^:]+:[A-Za-z_][A-Za-z0-9_]*$" } },
+    "types": { "type": "object", "propertyNames": { "pattern": "^[A-Z][A-Za-z0-9]*$" }, "additionalProperties": { "$ref": "#/$defs/fields" } },
+    "input": { "$ref": "#/$defs/fields" },
+    "output": { "$ref": "#/$defs/fields" },
+    "persist": { "type": "object", "properties": { "table": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } }, "additionalProperties": false },
+    "nl": { "type": "object", "propertyNames": { "enum": ["pl", "en"] }, "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+    "menu": {
+      "type": "object",
+      "required": ["category", "label", "interactionType"],
+      "properties": {
+        "category": { "type": "string" }, "group": { "type": "string" }, "label": { "type": "string" },
+        "icon": { "type": "string" }, "order": { "type": "integer" },
+        "interactionType": { "enum": ["trigger", "modal_form", "view_navigate", "tab_open"] }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "items": { "type": "object", "required": ["name", "input", "output"], "properties": { "name": { "type": "string" }, "input": { "type": "object" }, "output": { "type": "object" } } }
+    }
+  }
+}

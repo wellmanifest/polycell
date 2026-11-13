@@ -1,0 +1,14 @@
+# SCENARIO: polycell smoke
+# TYPE: api
+# GENERATED: true
+
+CONFIG[1]{key, value}:
+  base_url, http://localhost:8080
+
+API[6]{method, endpoint, expected_status}:
+  GET, /health, 200
+  GET, /api/registry, 200
+  GET, /api/cells, 200
+  GET, /api/hosts, 200
+  GET, /api/invocations, 200
+  GET, /api/process/checkout/plan, 200

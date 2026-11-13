@@ -1,0 +1,4 @@
+grpcio==1.85.1
+grpcio-tools==1.85.1
+PyYAML==6.0.3
+psycopg[binary]==3.3.6

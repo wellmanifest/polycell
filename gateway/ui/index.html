@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>polycell · digital twin console</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#262b36; --fg:#e6e8ee; --mut:#8b93a7; --acc:#5eead4; --bad:#f87171; --ok:#86efac; }
+  * { box-sizing:border-box } body { margin:0; font:14px/1.45 ui-sans-serif,system-ui; background:var(--bg); color:var(--fg) }
+  header { display:flex; gap:12px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line) }
+  header b { color:var(--acc) } header .sp { flex:1 }
+  select,input,textarea,button { background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit }
+  button { cursor:pointer } button.pri { background:var(--acc); color:#06201c; border:0; font-weight:600 }
+  main { display:grid; grid-template-columns:260px 1fr; min-height:calc(100vh - 50px) }
+  nav { border-right:1px solid var(--line); padding:12px; overflow:auto }
+  nav h4 { margin:14px 0 6px; color:var(--mut); font-size:11px; text-transform:uppercase; letter-spacing:.08em }
+  nav a { display:block; padding:5px 8px; border-radius:6px; color:var(--fg); text-decoration:none; cursor:pointer }
+  nav a:hover, nav a.on { background:var(--panel) } nav small { color:var(--mut) }
+  section { padding:16px; overflow:auto } .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+  #palette { width:100%; font-size:15px; padding:10px 12px; margin-bottom:12px }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:12px }
+  label { display:block; color:var(--mut); font-size:12px; margin:8px 0 3px } textarea, .card input { width:100% }
+  pre { margin:0; white-space:pre-wrap; word-break:break-word; font:12px/1.4 ui-monospace,monospace }
+  .tabs button.on { border-color:var(--acc); color:var(--acc) } table { width:100%; border-collapse:collapse; font-size:12px }
+  td,th { border-bottom:1px solid var(--line); padding:4px 6px; text-align:left } .ok{color:var(--ok)} .bad{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <b>polycell</b><span data-testid="health">…</span><span class="sp"></span>
+  <label style="margin:0">transport</label>
+  <select id="transport" data-testid="transport"><option>grpc</option><option>http</option><option>stdio</option></select>
+</header>
+<main>
+  <nav id="menu" data-testid="menu"></nav>
+  <section>
+    <input id="palette" data-testid="palette" placeholder="Ctrl+K · napisz po polsku lub angielsku, np. „policz cenę koszyka”">
+    <div class="card" id="form" data-testid="form"><span style="color:var(--mut)">Wybierz komórkę/proces z menu lub palety.</span></div>
+    <div class="card"><pre id="result" data-testid="result">—</pre></div>
+    <div class="row tabs" style="margin-bottom:8px">
+      <button data-tab="invocations" class="on">Invocations (DB)</button><button data-tab="parity">Protocol parity</button>
+      <button data-tab="logs">Logs</button><button data-tab="registry">Registry</button>
+    </div>
+    <div class="card" id="tab" data-testid="tab"></div>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const api = async (p, body) => {
+  const r = await fetch(p, body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  return r.json();
+};
+let INDEX, REG, current = null;
+
+function field(name, t, value) {
+  const complex = t.is_list || !["string","int32","int64","double","bool"].includes(t.base);
+  const v = value === undefined ? "" : (complex ? JSON.stringify(value) : value);
+  const tag = complex ? `<textarea rows="3" name="${name}" data-json="1" data-testid="in-${name}">${v}</textarea>`
+                      : `<input name="${name}" data-type="${t.base}" data-testid="in-${name}" value="${String(v).replaceAll('"','&quot;')}">`;
+  return `<label>${name} <small>${t.base}${t.is_list ? "[]" : ""}${t.optional ? "?" : ""}</small></label>${tag}`;
+}
+
+function openCell(urn) {
+  const c = INDEX.cells[urn]; current = { kind: "cell", name: c.name };
+  const ex = (c.examples[0] || {}).input || {};
+  $("#form").innerHTML = `<div class="row"><b>${c.name}</b><small style="color:var(--mut)">${urn} · ${c.owner}</small></div>
+    <p style="color:var(--mut);margin:4px 0">${c.summary}</p>
+    ${Object.entries(c.input).map(([k, t]) => field(k, t, ex[k])).join("")}
+    <div class="row" style="margin-top:10px"><button class="pri" data-testid="run" onclick="run()">Wywołaj</button></div>`;
+  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.id === c.name));
+}
+
+function openProcess(name) {
+  const p = INDEX.processes[name]; current = { kind: "process", name };
+  const ex = (p.examples[0] || {}).input || {};
+  $("#form").innerHTML = `<b>${p.title}</b><p style="color:var(--mut);margin:4px 0">${p.process_ref}</p>
+    <label>input (JSON)</label><textarea rows="8" name="__all" data-json="1" data-testid="in-process">${JSON.stringify(ex, null, 1)}</textarea>
+    <div class="row" style="margin-top:10px"><button class="pri" data-testid="run" onclick="run()">Uruchom proces</button>
+    <button onclick="api('/api/process/${name}/plan?transport='+$('#transport').value).then(show)">Pokaż plan</button></div>`;
+}
+
+function collect() {
+  const out = {};
+  document.querySelectorAll("#form [name]").forEach(el => {
+    if (el.value === "") return;
+    let v = el.dataset.json ? JSON.parse(el.value) : el.value;
+    if (el.dataset.type === "double" || el.dataset.type?.startsWith("int")) v = Number(v);
+    if (el.dataset.type === "bool") v = v === "true";
+    out[el.name] = v;
+  });
+  return out.__all ?? out;
+}
+
+const show = (o) => { $("#result").textContent = JSON.stringify(o, null, 2); $("#result").className = o.ok === false ? "bad" : ""; };
+
+async function run() {
+  const tr = $("#transport").value;
+  const path = current.kind === "cell" ? `/api/cells/${current.name}` : `/api/process/${current.name}`;
+  show(await api(`${path}?transport=${tr}`, collect()));
+  tab(document.querySelector(".tabs .on").dataset.tab);
+}
+
+async function tab(name) {
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  const el = $("#tab"); el.innerHTML = "…";
+  if (name === "invocations") {
+    const rows = await api("/api/invocations?limit=25");
+    el.innerHTML = `<table data-testid="invocations"><tr><th>id</th><th>urn</th><th>lang</th><th>transport</th><th>ok</th><th>ms</th><th>error</th></tr>${rows.map(r =>
+      `<tr><td>${r.id}</td><td>${r.urn.split(":").slice(-2).join(":")}</td><td>${r.lang}</td><td>${r.transport}</td><td class="${r.ok ? "ok" : "bad"}">${r.ok}</td><td>${r.duration_ms ?? ""}</td><td>${r.error ?? ""}</td></tr>`).join("")}</table>`;
+  } else if (name === "parity") {
+    const p = await api("/api/parity");
+    el.innerHTML = `<div data-testid="parity" class="${p.all_ok ? "ok" : "bad"}">all_ok=${p.all_ok}</div><table><tr><th>case</th><th>lang</th><th>http</th><th>grpc</th><th>stdio</th></tr>${p.rows.map(r =>
+      `<tr><td>${r.case}</td><td>${r.lang}</td>${["http","grpc","stdio"].map(t => `<td class="${r[t] === "ok" ? "ok" : "bad"}">${r[t]} ${r[t + "_rtt_ms"] ?? ""}ms</td>`).join("")}</tr>`).join("")}</table>`;
+  } else if (name === "logs") {
+    const l = await api("/api/logs?tail=40");
+    el.innerHTML = Object.entries(l).map(([k, v]) => `<b>${k}</b><pre>${v.slice(-15).join("\n").replaceAll("<","&lt;")}</pre>`).join("<hr>");
+  } else {
+    el.innerHTML = `<pre>${JSON.stringify(REG, null, 1).slice(0, 6000)}</pre>`;
+  }
+}
+
+async function init() {
+  [INDEX, REG] = await Promise.all([api("/api/cells"), api("/api/registry")]);
+  const h = await api("/health"); $("[data-testid=health]").textContent = `db=${h.db} default=${h.transport}`;
+  $("#transport").value = h.transport;
+  const groups = {};
+  for (const [urn, c] of Object.entries(INDEX.cells)) (groups[c.menu.category || "Cells"] ??= []).push(
+    `<a data-id="${c.name}" data-testid="menu-${c.name}" onclick="openCell('${urn}')">${c.menu.label || c.name} <small>${c.owner}</small></a>`);
+  for (const [n, p] of Object.entries(INDEX.processes)) (groups["Procesy (POA)"] ??= []).push(
+    `<a data-testid="menu-process-${n}" onclick="openProcess('${n}')">${p.title}</a>`);
+  $("#menu").innerHTML = Object.entries(groups).map(([g, a]) => `<h4>${g}</h4>${a.join("")}`).join("");
+  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => tab(b.dataset.tab));
+  tab("invocations");
+}
+
+$("#palette").addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter") return;
+  const m = await api("/api/nl", { text: e.target.value });
+  show(m);
+  if (!m.matched) return;
+  if (m.endpoint.startsWith("process.")) return openProcess(m.endpoint.slice(8));
+  const urn = Object.keys(INDEX.cells).find(u => INDEX.cells[u].name === m.endpoint);
+  if (urn) openCell(urn);
+});
+document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "k") { e.preventDefault(); $("#palette").focus(); } });
+init();
+</script>
+</body>
+</html>

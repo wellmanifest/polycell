@@ -1,0 +1,41 @@
+// Uniwersalny, NIEZMIENNY kontrakt transportowy. Nie zmienia się, gdy dochodzą/zmieniają się komórki.
+// Dzięki temu warstwa komunikacji (serwer i klient) nigdy nie wymaga refaktoryzacji:
+// zmiana logiki = nowy plik komórki, zmiana danych = nowy kontrakt (nowy URN :vN).
+// Typowane wiadomości dla klientów, którzy chcą ścisłego typowania, są w gen/proto/shop/cells.proto.
+syntax = "proto3";
+
+package polycell.v1;
+
+message InvokeRequest {
+  string urn = 1;          // np. urn:wm:cell:shop:pricing.quote:v1
+  string json_input = 2;   // dane zgodne z gen/jsonschema/<name>.input.json
+  string trace_id = 3;
+}
+
+message InvokeResponse {
+  string urn = 1;
+  bool ok = 2;
+  string json_output = 3;
+  string error = 4;
+  string lang = 5;
+  double duration_ms = 6;
+  string contract = 7;     // hash interfejsu, który zaimplementowała komórka
+}
+
+message ListRequest {}
+
+message CellInfo {
+  string urn = 1;
+  string contract = 2;
+  string cell = 3;
+}
+
+message ListResponse {
+  string lang = 1;
+  repeated CellInfo cells = 2;
+}
+
+service CellHost {
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  rpc List(ListRequest) returns (ListResponse);
+}
