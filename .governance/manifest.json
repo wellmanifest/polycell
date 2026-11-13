@@ -99,8 +99,7 @@
           "worktree-guard.yaml",
           ".gitattributes",
           ".github/workflows/new-project-branch-hygiene.yml",
-          "VERSION",
-          "compose.yml"
+          "VERSION"
         ]
       },
       "infrastructure": {
