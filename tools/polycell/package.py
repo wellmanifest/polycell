@@ -278,9 +278,16 @@ def _assemble_into(packages: list[Path], out: Path, runtime: Path, warm: bool, r
     for name in RUNTIME_DIRS:
         if (runtime / name).exists():
             shutil.copytree(runtime / name, out / name, ignore=runtime_ignore)
-    for name in ("Makefile", "requirements.txt", ".gitignore", ".dockerignore", ".nvmrc", "compose.yml", "AGENTS.md"):
+    for name in ("Makefile", "requirements.txt", ".gitignore", ".dockerignore", ".nvmrc", "compose.yml"):
         if (runtime / name).exists():
             shutil.copy2(runtime / name, out / name)
+    # Repository governance is not installed in assembled applications. Keep
+    # their instructions portable; older runtimes store these rules at root.
+    rules = runtime / "project/polycell-agent-rules.md"
+    if not rules.is_file():
+        rules = runtime / "AGENTS.md"
+    if rules.is_file():
+        shutil.copy2(rules, out / "AGENTS.md")
     for part in ("contracts/cells", "contracts/processes", "tests/golden", "cells/python", "cells/ts", "cells/rust"):
         (out / part).mkdir(parents=True)
     # Framework regressions depend on the demo's fixtures. Applications receive
