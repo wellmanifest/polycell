@@ -28,6 +28,9 @@ RULES = {
     "rust": """- Rust 2021, tylko std (+ serde_json dostępny). Plik jest wstawiany do modułu przez include!().
 - Pierwsza linia DOKŁADNIE: `// polycell: urn={urn} contract={h}`
 - `use crate::types::*;` i `pub fn run(input: {P}Input) -> Result<{P}Output, String>`.
+- Każda ścieżka sukcesu zwraca `Ok({P}Output {{ ... }})`, a błąd `Err(String)`. Nie zwracaj samej struktury bez `Ok(...)`.
+- Przed dopasowaniem `String` do wzorców tekstowych użyj `.as_str()` (otrzymasz `&str`); nie dopasowuj `&String` do literałów `"..."`.
+- Używaj wygenerowanych typów z `crate::types`; nie deklaruj ich ponownie ani nie zmieniaj sygnatury funkcji.
 - Bez `mod`, bez `//!`, bez `unsafe`, bez I/O.""",
 }
 
