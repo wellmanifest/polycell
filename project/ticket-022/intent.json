@@ -1,0 +1,95 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-022",
+  "summary": "Adopt wellmanifest docs standard and declare errors ownership",
+  "workstream": "governance",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "project/ticket-022/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    ".governance/docs.json",
+    ".governance/manifest.json"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "cbff079b789e56f4fe0b380c67bdc7c142aab7fe",
+    "targetBranch": "main",
+    "outcome": "Record wellmanifest/docs adoption metadata and grant governance ownership of errors/** for the wellmanifest/logs error catalog.",
+    "complexity": "S",
+    "estimatedMinutes": 20,
+    "nonGoals": [
+      "Do not modify runtime cells, gateway code, or conformance checks",
+      "Defer errors/README.md and PC001-PC009 runbooks to follow-up ticket"
+    ],
+    "budgets": {
+      "maxAffectedComponents": 1,
+      "maxImplementationFiles": 2,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Split docs adoption + manifest ownership update into ticket-022 so ticket-023 can allocate errors/** under the updated governance manifest.",
+      "components": [
+        {
+          "name": "governance-docs-and-ownership",
+          "paths": [
+            ".governance/docs.json",
+            ".governance/manifest.json"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [
+        {
+          "component": "governance-docs-and-ownership",
+          "description": "Add .governance/docs.json and errors/** governance path ownership in .governance/manifest.json",
+          "kind": "component-local-state"
+        }
+      ],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert PR commit; removes .governance/docs.json and errors/** ownership entry."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "wellman check --root . --standard wellmanifest/docs"
+        ],
+        "evidence": "wellmanifest/docs standard check passes with .governance/docs.json and docs/README.md"
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "./project/governance-check.sh --actor agent"
+        ],
+        "evidence": "Manifest ownership check and governance gate pass"
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "python3 standard/conformance.py --root .",
+          "python3 -m unittest discover -s tests -p 'test_*.py' -v"
+        ],
+        "evidence": "Conformance and full test suite pass"
+      }
+    ]
+  }
+}
