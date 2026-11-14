@@ -1,0 +1,93 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-023",
+  "summary": "Add wellmanifest/logs error catalog and conformance runbooks",
+  "workstream": "governance",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "project/ticket-023/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "errors/**"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "cf2012fe8a4e7194b583cfa33a0ff135b199f988",
+    "targetBranch": "main",
+    "outcome": "Publish errors/README.md and PC001-PC009 runbooks satisfying wellmanifest/logs for wellmanifest/polycell.",
+    "complexity": "L",
+    "estimatedMinutes": 45,
+    "nonGoals": [
+      "Do not modify standard/conformance.py error codes or runtime cell implementations"
+    ],
+    "budgets": {
+      "maxAffectedComponents": 1,
+      "maxImplementationFiles": 10,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Document all existing PC001-PC009 conformance error and warning codes under errors/ as governance-owned runbooks.",
+      "components": [
+        {
+          "name": "logs-error-catalog",
+          "paths": [
+            "errors/**"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [
+        {
+          "component": "logs-error-catalog",
+          "description": "Add errors/README.md and per-code PC001-PC009 runbooks",
+          "kind": "component-local-state"
+        }
+      ],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert PR commit; removes errors/ catalog and runbooks."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "wellman check --root . --standard wellmanifest/logs"
+        ],
+        "evidence": "wellmanifest/logs check passes with errors/README.md"
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "./project/governance-check.sh --actor agent",
+          "wellman check --root . --standard wellmanifest/docs"
+        ],
+        "evidence": "Governance and docs standards checks pass"
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "python3 standard/conformance.py --root .",
+          "python3 -m unittest discover -s tests -p 'test_*.py' -v"
+        ],
+        "evidence": "Conformance and full test suite pass"
+      }
+    ]
+  }
+}
