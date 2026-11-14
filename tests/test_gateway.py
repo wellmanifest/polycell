@@ -132,10 +132,10 @@ class HTTPTests(unittest.TestCase):
         with patch.object(core, 'invoke', return_value={'ok': True}) as invoke, patch.object(
                 core, 'run_process', return_value={'ok': True}) as process, patch.object(
                 core, 'nl_match', return_value={'matched': False}) as nl, patch.object(core, 'db') as database:
-            for token in ('NaN', 'Infinity', '-Infinity', '1e400', '-1e400'):
-                body = ('{"urn":"urn:wm:cell:shop:shipping.cost:v1","input":{"data":[' + token + ']},"text":"hello"}').encode()
+            for numeric_literal in ('NaN', 'Infinity', '-Infinity', '1e400', '-1e400'):
+                body = ('{"urn":"urn:wm:cell:shop:shipping.cost:v1","input":{"data":[' + numeric_literal + ']},"text":"hello"}').encode()
                 for endpoint in ('/api/invoke', '/api/cells/shipping.cost', '/api/process/checkout', '/api/nl'):
-                    with self.subTest(token=token, endpoint=endpoint):
+                    with self.subTest(numeric_literal=numeric_literal, endpoint=endpoint):
                         status, result = self.request(endpoint, body)
                         self.assertEqual(400, status, result)
                         self.assertIs(result['ok'], False)
