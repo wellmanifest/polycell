@@ -122,19 +122,38 @@ def _persist(urn: str, meta: dict, data: dict, r: dict) -> None:
 
 
 # ------------------------------------------------------------- POA: proces = kompozycja URN
+_MISSING = object()
+
+
 def _get(ctx: dict, expr):
     if not (isinstance(expr, str) and expr.startswith("$.")):
         return expr
     cur = ctx
     for part in expr[2:].split("."):
-        cur = cur.get(part) if isinstance(cur, dict) else None
+        if not isinstance(cur, dict) or part not in cur:
+            return _MISSING
+        cur = cur[part]
     return cur
 
 
 def _resolve(mapping, ctx):
     if isinstance(mapping, dict):
-        return {k: v for k, v in ((k, _resolve(v, ctx)) for k, v in mapping.items()) if v is not None}
-    return _get(ctx, mapping)
+        resolved = {}
+        for key, value in mapping.items():
+            if isinstance(value, str) and value.startswith('$.'):
+                value = _get(ctx, value)
+                if value is _MISSING:
+                    continue
+            else:
+                value = _resolve(value, ctx)
+            resolved[key] = value
+        return resolved
+    if isinstance(mapping, list):
+        return [_resolve(value, ctx) for value in mapping]
+    value = _get(ctx, mapping)
+    if value is _MISSING:
+        raise ValueError(f'unresolved process reference: {mapping}')
+    return value
 
 
 def plan(name: str, tr: str) -> dict:
@@ -184,7 +203,14 @@ def run_process(name: str, data: dict, tr: str | None = None) -> dict:
                "trace_id": trace_id, "steps": []}
     ok, error = True, ""
     for s in p["steps"]:
-        r = invoke(s["capability_ref"], _resolve(s.get("input", {}), ctx), tr, trace_id)
+        try:
+            arguments = _resolve(s.get("input", {}), ctx)
+        except ValueError as mapping_error:
+            meta = CELLS[s['capability_ref']]
+            r = {'ok': False, 'error': f'input mapping: {mapping_error}', 'lang': meta['owner'],
+                 'transport': tr, 'contract': meta['contract']}
+        else:
+            r = invoke(s["capability_ref"], arguments, tr, trace_id)
         receipt["steps"].append({k: r.get(k) for k in ("ok", "lang", "transport", "duration_ms", "contract", "error")} | {"id": s["id"]})
         if not r.get("ok"):
             ok, error = False, f"step {s['id']}: {r.get('error')}"
@@ -193,7 +219,14 @@ def run_process(name: str, data: dict, tr: str | None = None) -> dict:
         if "guard" in s and not guard_matches(s["guard"], ctx):
             ok, error = False, f"guard failed at {s['id']}: {s['guard']}"
             break
-    out = _resolve(p.get("output", {}), ctx) if ok else None
+    out = None
+    if ok:
+        try:
+            out = _resolve(p.get("output", {}), ctx)
+        except ValueError as mapping_error:
+            ok, error = False, f'output mapping: {mapping_error}'
+    if not ok:
+        receipt['error'] = error
     res = {"ok": ok, "error": error, "output": out, "receipt": receipt, "plan": pl}
     try:
         db().insert("wm_process_runs", {"trace_id": trace_id, "process_ref": p["process_ref"], "ok": ok,
