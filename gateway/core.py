@@ -301,7 +301,69 @@ def _llm_compile(text: str) -> dict:
 
 # ------------------------------------------------------------- parity: te same przypadki na każdym protokole
 def parity(transports=transport.TRANSPORTS) -> dict:
-    cases = json.loads((ROOT / "tests/generated/cases.json").read_text())
+    errors = []
+    if not isinstance(transports, (tuple, list)) or not transports:
+        return {"all_ok": False, "rows": [], "errors": ["select a nonempty list of transports"]}
+    transports = tuple(transports)
+    seen_transports = set()
+    for selected in transports:
+        if not isinstance(selected, str) or selected not in transport.TRANSPORTS:
+            errors.append(f"unsupported parity transport: {selected}")
+        elif selected in seen_transports:
+            errors.append(f"duplicate parity transport: {selected}")
+        else:
+            seen_transports.add(selected)
+    if errors:
+        return {"all_ok": False, "rows": [], "errors": errors}
+    try:
+        cases = json.loads((ROOT / "tests/generated/cases.json").read_text())
+    except (OSError, ValueError) as error:
+        return {"all_ok": False, "rows": [], "errors": [f"cannot read parity cases: {error}"]}
+    if not CELLS:
+        errors.append("no registered cells to test")
+    if not isinstance(cases, list) or not cases:
+        errors.append("parity cases must be a nonempty list")
+    if errors:
+        return {"all_ok": False, "rows": [], "errors": errors}
+    covered, names, schemas = set(), set(), {}
+    for number, case in enumerate(cases):
+        label = f"case[{number}]"
+        if not isinstance(case, dict):
+            errors.append(f"{label}: expected object")
+            continue
+        missing = {"urn", "owner", "name", "input", "output"} - case.keys()
+        if missing:
+            errors.append(f"{label}: missing fields: {', '.join(sorted(missing))}")
+            continue
+        name, urn = case["name"], case["urn"]
+        if not isinstance(name, str) or not name.strip() or name in names:
+            errors.append(f"{label}: invalid or duplicate name")
+            continue
+        names.add(name)
+        if not isinstance(urn, str) or urn not in CELLS:
+            errors.append(f"{name}: unknown cell URN")
+            continue
+        meta = CELLS[urn]
+        if case["owner"] != meta["owner"]:
+            errors.append(f"{name}: owner does not match registry")
+            continue
+        prior_errors = len(errors)
+        for kind in ("input", "output"):
+            try:
+                if (urn, kind) not in schemas:
+                    schemas[urn, kind] = _schema(meta["name"], kind)
+                if not isinstance(schemas[urn, kind], dict):
+                    raise ValueError("generated schema must be an object")
+                errors.extend(f"{name} {kind}: {message}"
+                              for message in validate(case[kind], schemas[urn, kind]))
+            except (OSError, ValueError, KeyError, TypeError, RecursionError) as error:
+                errors.append(f"{name} {kind}: cannot validate generated schema: {error}")
+        if len(errors) == prior_errors:
+            covered.add(urn)
+    for urn in sorted(set(CELLS) - covered):
+        errors.append(f"no valid parity case for {urn}")
+    if errors:
+        return {"all_ok": False, "rows": [], "errors": errors}
     rows = []
     for c in cases:
         row = {"case": c["name"], "lang": c["owner"]}
@@ -310,7 +372,7 @@ def parity(transports=transport.TRANSPORTS) -> dict:
             row[tr] = "ok" if r.get("ok") and _eq(r["output"], c["output"]) else f"FAIL {r.get('error') or r.get('output')}"
             row[f"{tr}_rtt_ms"] = r.get("rtt_ms")
         rows.append(row)
-    return {"all_ok": all(row[t] == "ok" for row in rows for t in transports), "rows": rows}
+    return {"all_ok": all(row[t] == "ok" for row in rows for t in transports), "rows": rows, "errors": []}
 
 
 # ------------------------------------------------------------- logi (ring buffer + docker socket)

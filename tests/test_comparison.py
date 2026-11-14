@@ -68,9 +68,13 @@ class OutputComparisonTests(unittest.TestCase):
             (root / 'tests/generated/cases.json').write_text(json.dumps([
                 {'name': 'json-value', 'owner': 'python', 'urn': 'urn:wm:cell:test:json.echo:v1',
                  'input': {'data': True}, 'output': {'data': True}}]))
-            with patch.object(core, 'ROOT', root), patch.object(core, 'invoke', return_value={
-                    'ok': True, 'output': {'data': 1}}):
+            cells = {'urn:wm:cell:test:json.echo:v1': {'owner': 'python', 'name': 'json.echo'}}
+            schema = {'type': 'object', 'properties': {'data': {}}, 'required': ['data']}
+            with patch.object(core, 'ROOT', root), patch.object(core, 'CELLS', cells), patch.object(
+                    core, '_schema', return_value=schema), patch.object(core, 'invoke', return_value={
+                    'ok': True, 'output': {'data': 1}}) as dispatch:
                 self.assertFalse(core.parity()['all_ok'])
+                self.assertEqual(3, dispatch.call_count)
 
     def test_qualification_rejects_json_behavior_change(self):
         validator = Draft202012Validator({'type': 'object', 'properties': {'data': {}}, 'required': ['data']})
