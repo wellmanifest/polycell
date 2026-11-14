@@ -5,6 +5,7 @@ Adresy hostów (env):  HOST_<LANG>_HTTP, HOST_<LANG>_GRPC, HOST_<LANG>_STDIO (ko
 from __future__ import annotations
 
 import json
+import math
 import os
 import shlex
 import subprocess
@@ -79,13 +80,45 @@ def call_stdio(lang: str, urn: str, data: dict, trace_id: str) -> dict:
     return _stdio[cmd].call(urn, data, trace_id)
 
 
+def _validate_response(response, lang: str, urn: str) -> dict:
+    """Validate the common wire envelope before trusting any host metadata."""
+    def invalid(reason):
+        raise ValueError(f"invalid host response: {reason}")
+
+    if not isinstance(response, dict):
+        invalid("expected object")
+    required = {"urn", "ok", "output", "error", "lang", "duration_ms", "contract"}
+    if missing := required - response.keys():
+        invalid("missing fields: " + ", ".join(sorted(missing)))
+    if type(response["ok"]) is not bool:
+        invalid("ok must be boolean")
+    if response["urn"] != urn:
+        invalid("urn mismatch")
+    if response["lang"] != lang:
+        invalid("lang mismatch")
+    for field in ("error", "contract"):
+        if not isinstance(response[field], str):
+            invalid(f"{field} must be string")
+    duration = response["duration_ms"]
+    if (type(duration) not in (int, float) or duration < 0
+            or (isinstance(duration, float) and not math.isfinite(duration))):
+        invalid("duration_ms must be finite and nonnegative")
+    if response["ok"] != (response["error"] == ""):
+        invalid("ok and error disagree")
+    try:
+        json.dumps(response, allow_nan=False)
+    except (TypeError, ValueError, OverflowError):
+        invalid("expected finite JSON values")
+    return dict(response)
+
+
 def call(lang: str, transport: str, urn: str, data: dict, trace_id: str = "") -> dict:
     t0 = time.perf_counter()
     try:
         if transport not in TRANSPORTS:
             raise ValueError(f"unsupported transport: {transport}")
         fn = {"http": call_http, "grpc": call_grpc, "stdio": call_stdio}[transport]
-        r = fn(lang, urn, data, trace_id)
+        r = _validate_response(fn(lang, urn, data, trace_id), lang, urn)
     except Exception as e:  # noqa: BLE001
         r = {"urn": urn, "ok": False, "output": None, "error": f"transport {transport}: {e}", "lang": lang}
     r["transport"] = transport
