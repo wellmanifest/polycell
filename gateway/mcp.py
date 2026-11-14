@@ -1,6 +1,15 @@
-"""MCP JSON-RPC server over stdio for cells and processes."""
+"""MCP JSON-RPC server over stdio for cells and processes.
+
+By default, calls use WM_GATEWAY_URL (http://127.0.0.1:8080). A failed or lost
+HTTP response never triggers a local retry: the remote call may have completed.
+Use ``python -m gateway.mcp --local`` to select direct execution before any call.
+Local mode needs its own configured hosts and database connection; do not share
+a single-connection PGlite database with a running gateway.
+"""
 from __future__ import annotations
 
+import argparse
+import http.client
 import json
 import os
 import sys
@@ -22,23 +31,22 @@ for name in core.PROCESSES:
 GATEWAY = os.environ.get("WM_GATEWAY_URL", "http://127.0.0.1:8080")
 
 
-def via_gateway(kind: str, name: str, args: dict) -> dict | None:
+def via_gateway(kind: str, name: str, args: dict) -> dict:
     path = f"/api/process/{name}" if kind == "process" else f"/api/cells/{name}"
     req = urllib.request.Request(GATEWAY + path, data=json.dumps(args).encode(), headers={"content-type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=15) as response:
             return json.loads(response.read())
     except urllib.error.HTTPError as error:
-        return json.loads(error.read())
-    except OSError:
-        return None
+        with error:
+            return json.loads(error.read())
 
 
 def error_response(mid, code: int, message: str) -> dict:
     return {"jsonrpc": "2.0", "id": mid, "error": {"code": code, "message": message}}
 
 
-def handle(msg) -> dict | None:
+def handle(msg, *, local: bool = False) -> dict | None:
     if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0" or not isinstance(msg.get("method"), str):
         return error_response(None, -32600, "Invalid Request")
     mid, method = msg.get("id"), msg["method"]
@@ -61,13 +69,16 @@ def handle(msg) -> dict | None:
             return error_response(mid, -32602, "Unknown or ambiguous tool")
         kind, target = routes[0]
         try:
-            response = via_gateway(kind, target, args)
-            if response is None:
+            if local:
                 response = core.run_process(target, args) if kind == "process" else core.invoke(target, args)
+            else:
+                response = via_gateway(kind, target, args)
             if not isinstance(response, dict):
                 raise ValueError("invalid gateway response")
-        except (ValueError, KeyError, TypeError, OSError):
-            return error_response(mid, -32603, "Tool invocation failed")
+        except (ValueError, KeyError, TypeError, OSError, http.client.HTTPException, RecursionError):
+            message = ("Tool invocation failed" if local else
+                       "Gateway response unavailable or invalid; execution may have completed. The call was not retried.")
+            return error_response(mid, -32603, message)
         result = {"content": [{"type": "text", "text": json.dumps(response, ensure_ascii=False)}],
                   "isError": not response.get("ok")}
     else:
@@ -76,6 +87,9 @@ def handle(msg) -> dict | None:
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--local", action="store_true", help="execute directly using configured hosts and database; skip HTTP gateway")
+    args = parser.parse_args()
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -84,7 +98,7 @@ def main():
         except (ValueError, RecursionError):
             out = error_response(None, -32700, "Parse error")
         else:
-            out = handle(message)
+            out = handle(message, local=args.local)
         if out is not None:
             sys.stdout.write(json.dumps(out, ensure_ascii=False) + "\n")
             sys.stdout.flush()
