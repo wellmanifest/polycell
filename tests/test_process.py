@@ -69,6 +69,7 @@ class ProcessGuardTests(unittest.TestCase):
         self.assertIn("guard failed at first", result["error"])
         self.assertEqual(1, self.dispatch.call_count)
         self.assertEqual(["first"], [step["id"] for step in result["receipt"]["steps"]])
+        self.assertEqual(result['error'], result['receipt']['error'])
         self.assertFalse(self.database.insert.call_args.args[1]["ok"])
 
     def test_boolean_and_number_are_distinct_even_when_nested(self):
@@ -228,6 +229,109 @@ class GuardConformanceTests(unittest.TestCase):
             process["steps"][0]["guard"] = "$.steps.validate.valid == true"
             path.write_text(yaml.safe_dump(process))
             self.assertEqual([], [f for f in conformance(fixture) if f["severity"] == "error"])
+
+
+class ProcessMappingTests(unittest.TestCase):
+    def setUp(self):
+        self.urn = 'urn:wm:cell:test:mapping.echo:v1'
+        self.process = {'schema': 'poa.process/v1', 'process_ref': 'poa://test/process/mapping/v1',
+                        'steps': [{'id': 'echo', 'capability_ref': self.urn, 'input': {'data': '$.data'}}],
+                        'output': {'data': '$.steps.echo.data'}}
+        self.enterContext(patch.object(core, 'PROCESSES', {'mapping': self.process}))
+        self.enterContext(patch.object(core, 'CELLS', {self.urn: {'owner': 'python', 'contract': 'mapping-hash'}}))
+        def echo(urn, data, protocol, trace_id):
+            if 'data' not in data:
+                return {'ok': False, 'error': 'input contract: data required'}
+            return {'ok': True, 'output': {'data': data['data']}, 'contract': 'mapping-hash'}
+        self.dispatch = self.enterContext(patch.object(core, 'invoke', side_effect=echo))
+        self.database = Mock()
+        self.enterContext(patch.object(core, 'db', return_value=self.database))
+
+    def test_literal_null_survives_input_and_output_maps(self):
+        self.process['steps'][0]['input'] = {'data': None}
+        self.process['output']['literal'] = None
+        result = core.run_process('mapping', {})
+        self.assertTrue(result['ok'], result)
+        self.assertEqual({'data': None}, self.dispatch.call_args.args[1])
+        self.assertEqual({'data': None, 'literal': None}, result['output'])
+
+    def test_referenced_null_is_not_an_absent_field(self):
+        result = core.run_process('mapping', {'data': None})
+        self.assertTrue(result['ok'], result)
+        self.assertEqual({'data': None}, result['output'])
+
+    def test_nested_arrays_resolve_references_and_keep_positions(self):
+        self.process['steps'][0]['input'] = {'data': ['$.left', {'inner': '$.data'}, None, False, 0,
+                                                     {'list': ['$.left', '$.data']}]}
+        result = core.run_process('mapping', {'left': 3, 'data': None})
+        self.assertTrue(result['ok'], result)
+        self.assertEqual({'data': [3, {'inner': None}, None, False, 0, {'list': [3, None]}]}, result['output'])
+
+    def test_missing_optional_fields_stay_omitted(self):
+        self.process['steps'][0]['input']['extra'] = '$.missing'
+        self.process['output']['extra'] = '$.steps.echo.missing'
+        result = core.run_process('mapping', {'data': None})
+        self.assertTrue(result['ok'], result)
+        self.assertEqual({'data': None}, self.dispatch.call_args.args[1])
+        self.assertEqual({'data': None}, result['output'])
+
+    def test_referenced_data_is_not_interpreted_as_another_mapping(self):
+        data = {'literal': '$.absent', 'items': ['$.absent', None]}
+        result = core.run_process('mapping', {'data': data})
+        self.assertTrue(result['ok'], result)
+        self.assertEqual({'data': data}, result['output'])
+
+    def test_missing_array_entry_fails_before_dispatch_and_is_persisted(self):
+        self.process['steps'][0]['input'] = {'data': ['$.missing']}
+        result = core.run_process('mapping', {})
+        self.assertFalse(result['ok'])
+        self.assertIn('input mapping', result['error'])
+        self.assertIn('$.missing', result['error'])
+        self.dispatch.assert_not_called()
+        self.assertEqual(['echo'], [step['id'] for step in result['receipt']['steps']])
+        self.assertFalse(result['receipt']['steps'][0]['ok'])
+        self.assertEqual('wm_process_runs', self.database.insert.call_args.args[0])
+        self.assertFalse(self.database.insert.call_args.args[1]['ok'])
+        json.dumps(result, allow_nan=False)
+
+    def test_missing_root_input_reference_fails_before_dispatch(self):
+        self.process['steps'][0]['input'] = '$.missing'
+        result = core.run_process('mapping', {})
+        self.assertFalse(result['ok'])
+        self.assertIn('input mapping', result['error'])
+        self.dispatch.assert_not_called()
+
+    def test_missing_array_output_fails_with_a_completed_step_receipt(self):
+        self.process['output'] = {'data': ['$.steps.echo.absent']}
+        result = core.run_process('mapping', {'data': 'ok'})
+        self.assertFalse(result['ok'])
+        self.assertIn('output mapping', result['error'])
+        self.assertIsNone(result['output'])
+        self.assertTrue(result['receipt']['steps'][0]['ok'])
+        self.assertEqual(result['error'], result['receipt']['error'])
+        self.assertEqual(1, self.dispatch.call_count)
+        self.assertFalse(self.database.insert.call_args.args[1]['ok'])
+
+    def test_missing_root_output_reference_is_not_a_successful_null(self):
+        self.process['output'] = '$.steps.echo.absent'
+        result = core.run_process('mapping', {'data': 'ok'})
+        self.assertFalse(result['ok'])
+        self.assertIn('output mapping', result['error'])
+        self.assertIsNone(result['output'])
+
+    def test_explicit_root_output_null_remains_successful(self):
+        self.process['output'] = None
+        result = core.run_process('mapping', {'data': 'ok'})
+        self.assertTrue(result['ok'], result)
+        self.assertIsNone(result['output'])
+
+    def test_optional_nonnullable_field_does_not_silently_drop_null(self):
+        mapping = {'items': '$.items', 'currency': '$.currency', 'coupon': '$.coupon'}
+        data = {'items': [], 'currency': 'PLN'}
+        schema = core._schema('pricing.quote', 'input')
+        self.assertEqual([], core.validate(core._resolve(mapping, data), schema))
+        data['coupon'] = None
+        self.assertTrue(core.validate(core._resolve(mapping, data), schema))
 
 
 if __name__ == "__main__":
