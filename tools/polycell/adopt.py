@@ -27,7 +27,16 @@ PURE_VERB = re.compile(r"^(validate|parse|normalize|normalise|compute|calc|calcu
                        r"reconcile|score|match|classify|convert|to_|from_|build_|derive|merge|diff|plan|select|rank|resolve|"
                        r"encode|decode|serialize|deserialize|compare|summari[sz]e|extract|transform|map_|filter_)")
 IO_VERB = re.compile(r"^(main|run|load_|read_|write_|save_|git_|fetch|post|get_|open|start|stop|serve|install|publish|print)")
-SKIP = re.compile(r"(^|/)(\.subactor|tests?|benchmarks?|examples?|vendor|site-packages|node_modules|templates|migrations)(/|$)|test_")
+SKIP_DIRS = frozenset({
+    ".git", ".worktrees", "worktrees", ".governance", ".subactor",
+    ".venv", "venv", "build", "dist", "gen", ".run", "__pycache__",
+    "test", "tests", "benchmark", "benchmarks", "example", "examples",
+    "vendor", "site-packages", "node_modules", "templates", "migrations",
+})
+SKIP = re.compile(
+    r"(^|/)(\.git|\.worktrees|worktrees|\.governance|\.subactor|\.venv|venv|build|dist|gen|\.run|__pycache__|"
+    r"[^/]+\.egg-info|tests?|benchmarks?|examples?|vendor|site-packages|node_modules|templates|migrations)(/|$)|(^|/)test_"
+)
 IMPURE_CALLS = {"open", "print", "input", "exec", "eval"}
 IMPURE_MODS = {"os", "sys", "subprocess", "socket", "requests", "httpx", "urllib", "shutil", "sqlite3", "psycopg", "time"}
 
@@ -95,17 +104,30 @@ def _impure(node) -> bool:
     return False
 
 
+def _iter_source_py_files(src: Path):
+    for root, dirs, files in os.walk(src):
+        dirs[:] = [
+            d for d in sorted(dirs)
+            if d not in SKIP_DIRS and not d.endswith(".egg-info")
+        ]
+        for fname in sorted(files):
+            if not fname.endswith(".py") or fname.startswith("test_"):
+                continue
+            full = Path(root) / fname
+            rel = full.relative_to(src).as_posix()
+            if not SKIP.search(rel):
+                yield full, rel
+
+
 def inventory_src(src: Path) -> dict:
     funcs = []
-    for p in sorted(src.rglob("*.py")):
-        rel = str(p.relative_to(src))
-        if SKIP.search(rel):
-            continue
+    for p, rel in _iter_source_py_files(src):
         try:
-            tree = ast.parse(p.read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError):
+            source_text = p.read_text(encoding="utf-8")
+            tree = ast.parse(source_text)
+        except (SyntaxError, UnicodeDecodeError, OSError):
             continue
-        nlines = len(p.read_text(encoding="utf-8").splitlines())
+        nlines = len(source_text.splitlines())
         for n in tree.body:
             if isinstance(n, ast.FunctionDef):
                 args = [a.arg for a in n.args.args if a.arg not in ("self", "cls")]
