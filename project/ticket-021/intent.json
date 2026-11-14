@@ -1,0 +1,73 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-021",
+  "summary": "Add documentation index for wellmanifest/docs",
+  "workstream": "integration",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "project/ticket-021/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "docs/README.md"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "c8e7e13e3fcec9b1dcd47e581ea5ed4a8e75912a",
+    "architecture": {
+      "components": [
+        {
+          "name": "documentation-index",
+          "paths": [
+            "docs/README.md"
+          ]
+        }
+      ],
+      "dataChanges": [],
+      "decision": "Create the tracked docs/README.md index linking existing documentation under docs/ and README.md before adopting .governance/docs.json in the governance workstream.",
+      "interfaceChanges": [],
+      "responsibilityChanges": false,
+      "rollback": "Revert through protected review; existing documentation files remain intact.",
+      "status": "accepted",
+      "ui": {
+        "evidence": [],
+        "impact": "none",
+        "states": []
+      }
+    },
+    "budgets": {
+      "maxAffectedComponents": 1,
+      "maxImplementationFiles": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "complexity": "S",
+    "estimatedMinutes": 20,
+    "nonGoals": [
+      "Do not modify .governance/manifest.json, .governance/docs.json, errors/, or application runtime code in this integration ticket",
+      "Preserve existing documentation content without rewriting historical reports"
+    ],
+    "outcome": "Publish tracked docs/README.md index for wellmanifest/polycell.",
+    "runtimeDependencies": [],
+    "targetBranch": "main",
+    "validation": [
+      {
+        "commands": [
+          "./project/governance-check.sh --actor agent",
+          "python3 standard/conformance.py --root ."
+        ],
+        "criterion": "AC-01",
+        "evidence": "Tracked docs/README.md exists, links only verified repository files, and passes governance and conformance gates."
+      }
+    ]
+  }
+}
