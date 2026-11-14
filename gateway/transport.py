@@ -4,10 +4,13 @@ Adresy hostów (env):  HOST_<LANG>_HTTP, HOST_<LANG>_GRPC, HOST_<LANG>_STDIO (ko
 """
 from __future__ import annotations
 
+import atexit
 import json
 import math
 import os
+import queue
 import shlex
+import signal
 import subprocess
 import sys
 import threading
@@ -27,6 +30,7 @@ DEFAULTS = {
              "stdio": f"{ROOT}/hosts/rust/target/release/host --stdio"},
 }
 TRANSPORTS = ("http", "grpc", "stdio")
+STDIO_TIMEOUT = 10.0
 
 
 def addr(lang: str, transport: str) -> str:
@@ -60,24 +64,117 @@ class _Stdio:
 
     def __init__(self, cmd: str):
         self.p = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                  stderr=subprocess.DEVNULL, text=True, bufsize=1)
+                                  stderr=subprocess.DEVNULL, text=True, bufsize=1,
+                                  start_new_session=os.name == "posix")
         self.lock = threading.Lock()
+        self.closed = threading.Event()
+        self.requests = queue.Queue(maxsize=1)
+        self._close_lock = threading.Lock()
+        self.worker = threading.Thread(target=self._serve, name="polycell-stdio", daemon=True)
+        self.worker.start()
 
-    def call(self, urn, data, trace_id):
-        with self.lock:
-            self.p.stdin.write(json.dumps({"urn": urn, "input": data, "trace_id": trace_id}) + "\n")
-            self.p.stdin.flush()
-            return json.loads(self.p.stdout.readline())
+    def _serve(self):
+        try:
+            while not self.closed.is_set():
+                request = self.requests.get()
+                if request is None:
+                    break
+                payload, done, result = request
+                try:
+                    if self.closed.is_set():
+                        raise EOFError("stdio host is closed")
+                    self.p.stdin.write(payload)
+                    self.p.stdin.flush()
+                    line = self.p.stdout.readline()
+                    if not line:
+                        raise EOFError("stdio host closed stdout")
+                    result["response"] = json.loads(line)
+                except Exception as error:  # noqa: BLE001 - delivered to the calling thread
+                    result["error"] = error
+                    self.close()
+                finally:
+                    done.set()
+        finally:
+            for stream in (self.p.stdin, self.p.stdout):
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+
+    def close(self):
+        with self._close_lock:
+            if not self.closed.is_set():
+                self.closed.set()
+                if self.p.poll() is None:
+                    try:
+                        if os.name == "posix":
+                            os.killpg(self.p.pid, signal.SIGKILL)
+                        else:
+                            self.p.kill()
+                    except ProcessLookupError:
+                        pass
+                try:
+                    self.p.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    pass
+                try:
+                    self.requests.put_nowait(None)
+                except queue.Full:
+                    pass
+        if threading.current_thread() is not self.worker:
+            self.worker.join(timeout=1)
+
+    def call(self, urn, data, trace_id, timeout=STDIO_TIMEOUT):
+        deadline = time.monotonic() + timeout
+        if not self.lock.acquire(timeout=max(0, deadline - time.monotonic())):
+            raise TimeoutError("stdio request timed out waiting for host")
+        try:
+            if self.closed.is_set():
+                raise EOFError("stdio host is closed")
+            payload = json.dumps({"urn": urn, "input": data, "trace_id": trace_id}) + "\n"
+            done, result = threading.Event(), {}
+            self.requests.put_nowait((payload, done, result))
+            if not done.wait(timeout=max(0, deadline - time.monotonic())):
+                self.close()
+                raise TimeoutError("stdio request timed out")
+            if "error" in result:
+                self.close()
+                raise result["error"]
+            return result["response"]
+        finally:
+            self.lock.release()
 
 
 _stdio: dict[str, _Stdio] = {}
+_stdio_lock = threading.Lock()
+
+
+@atexit.register
+def _close_stdio():
+    with _stdio_lock:
+        clients = list(_stdio.values())
+        _stdio.clear()
+    for client in clients:
+        client.close()
 
 
 def call_stdio(lang: str, urn: str, data: dict, trace_id: str) -> dict:
     cmd = addr(lang, "stdio")
-    if cmd not in _stdio or _stdio[cmd].p.poll() is not None:
-        _stdio[cmd] = _Stdio(cmd)
-    return _stdio[cmd].call(urn, data, trace_id)
+    previous = None
+    with _stdio_lock:
+        client = _stdio.get(cmd)
+        if client is None or client.closed.is_set() or client.p.poll() is not None:
+            previous, client = client, _Stdio(cmd)
+            _stdio[cmd] = client
+    if previous is not None:
+        previous.close()
+    try:
+        return client.call(urn, data, trace_id, timeout=STDIO_TIMEOUT)
+    finally:
+        if client.closed.is_set():
+            with _stdio_lock:
+                if _stdio.get(cmd) is client:
+                    del _stdio[cmd]
 
 
 def _validate_response(response, lang: str, urn: str) -> dict:

@@ -6,9 +6,11 @@ import json
 import os
 from pathlib import Path
 import shlex
+import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -251,10 +253,214 @@ class WireEnvelopeTests(unittest.TestCase):
                 self.exercise('stdio', range(len(self.replies)))
             finally:
                 for client in transport._stdio.values():
-                    client.p.terminate()
-                    client.p.wait(timeout=3)
-                    client.p.stdin.close()
-                    client.p.stdout.close()
+                    client.close()
+
+    def test_stdio_timeout_stops_process_and_persists_failure(self):
+        host = self.directory / 'silent.py'
+        host.write_text('import sys,time\nfor line in sys.stdin:\n time.sleep(60)\n')
+        command = shlex.join([sys.executable, str(host)])
+        with patch.dict(os.environ, {'HOST_PYTHON_STDIO': command}), patch.dict(
+                transport._stdio, {}, clear=True), patch.object(transport, 'STDIO_TIMEOUT', 0.15):
+            try:
+                request = urllib.request.Request(self.base + '/api/process/envelope?transport=stdio',
+                    data=b'{"weight_kg":1}', headers={'content-type': 'application/json'})
+                with self.assertRaises(urllib.error.HTTPError) as failure:
+                    urllib.request.urlopen(request, timeout=5)
+                with failure.exception as response:
+                    self.assertEqual(422, response.code)
+                    result = json.load(response)
+                self.assertIs(result['ok'], False)
+                self.assertIn('timed out', result['error'])
+                self.assertEqual(['first'], [step['id'] for step in result['receipt']['steps']])
+                trace = result['receipt']['trace_id']
+                rows = self.database.query('select * from wm_invocations where trace_id=?', (trace,))
+                self.assertEqual(1, len(rows))
+                self.assertFalse(rows[0]['ok'])
+                saved = self.database.query('select * from wm_process_runs where trace_id=?', (trace,))
+                self.assertEqual(1, len(saved))
+                self.assertFalse(saved[0]['ok'])
+                self.assertEqual(result['receipt'], json.loads(saved[0]['receipt']))
+                self.assertEqual([], self.database.query('select * from wire_successes where trace_id=?', (trace,)))
+                self.assertEqual({}, transport._stdio)
+            finally:
+                for client in list(transport._stdio.values()):
+                    client.close()
+
+
+class StdioDeadlineTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.clients = []
+        self.spawn_delay = 0
+        original = transport._Stdio
+        def spawn(command):
+            time.sleep(self.spawn_delay)
+            script = Path(shlex.split(command)[-1])
+            ready = script.with_suffix('.ready')
+            ready.unlink(missing_ok=True)
+            client = original(command)
+            self.clients.append(client)
+            deadline = time.monotonic() + 3
+            while not ready.exists():
+                if time.monotonic() >= deadline:
+                    raise RuntimeError('fixture host did not start')
+                time.sleep(0.005)
+            return client
+        self.enterContext(patch.object(transport, '_Stdio', side_effect=spawn))
+        self.enterContext(patch.dict(transport._stdio, {}, clear=True))
+        self.enterContext(patch.object(transport, 'STDIO_TIMEOUT', 1.0, create=True))
+        self.addCleanup(self.close_clients)
+
+    def close_clients(self):
+        for client in self.clients:
+            if hasattr(client, 'close'):
+                client.close()
+            else:  # Cleanup also bounds the old implementation during regression reproduction.
+                client.p.kill()
+                client.p.wait(timeout=3)
+                for stream in (client.p.stdin, client.p.stdout):
+                    try:
+                        stream.close()
+                    except OSError:
+                        pass
+
+    def host(self, body):
+        script = self.directory / f'host{len(list(self.directory.glob("*.py")))}.py'
+        script.write_text('import json,os,sys,time\nfrom pathlib import Path\n'
+            'Path(__file__).with_suffix(".ready").write_text(str(os.getpid()))\n'
+            'def reply(request):\n'
+            ' return {"urn":request["urn"],"ok":True,"output":request["input"],"error":"",'
+            '"lang":"python","contract":"fixture","duration_ms":0}\n' + body)
+        command = shlex.join([sys.executable, str(script)])
+        self.enterContext(patch.dict(os.environ, {'HOST_PYTHON_STDIO': command}))
+        return script
+
+    def call(self, data):
+        result = []
+        thread = threading.Thread(target=lambda: result.append(transport.call('python', 'stdio', 'urn:wm:probe', data)))
+        thread.start()
+        thread.join(timeout=2.5)
+        completed = not thread.is_alive()
+        if not completed:
+            self.close_clients()
+            thread.join(timeout=3)
+        self.assertTrue(completed, 'stdio request exceeded the watchdog')
+        self.assertEqual(1, len(result))
+        return result[0]
+
+    def test_silent_partial_and_blocked_write_requests_have_deadlines(self):
+        for body, data in [('for line in sys.stdin:\n time.sleep(60)\n', {}),
+                           ('for line in sys.stdin:\n sys.stdout.write("{");sys.stdout.flush();time.sleep(60)\n', {}),
+                           ('time.sleep(60)\n', {'large': 'x' * 262144})]:
+            with self.subTest(body=body), patch.object(transport, 'STDIO_TIMEOUT', 0.15, create=True):
+                self.host(body)
+                result = self.call(data)
+                self.assertIs(result['ok'], False)
+                self.assertIn('timed out', result['error'])
+                self.assertEqual({}, transport._stdio)
+                self.assertIsNotNone(self.clients[-1].p.poll())
+
+    def restarting_host(self, failure):
+        flag = self.directory / 'attempts'
+        self.host(f'flag=Path({str(flag)!r})\n'
+            'attempt=int(flag.read_text())+1 if flag.exists() else 1\nflag.write_text(str(attempt))\n'
+            'for line in sys.stdin:\n request=json.loads(line)\n'
+            f' if attempt==1:\n  {failure}\n'
+            ' print(json.dumps(reply(request)),flush=True)\n')
+        return flag
+
+    def assert_restart(self, failure, timed_out=False):
+        attempts = self.restarting_host(failure)
+        with patch.object(transport, 'STDIO_TIMEOUT', 0.15, create=True):
+            failed = self.call({'value': 1})
+        self.assertIs(failed['ok'], False)
+        if timed_out:
+            self.assertIn('timed out', failed['error'])
+        self.assertEqual('1', attempts.read_text(), 'failed requests must never be replayed')
+        self.assertEqual({}, transport._stdio)
+        old = self.clients[-1]
+        self.assertIsNotNone(old.p.poll())
+        recovered = self.call({'value': 2})
+        self.assertIs(recovered['ok'], True, recovered)
+        self.assertEqual({'value': 2}, recovered['output'])
+        self.assertEqual('2', attempts.read_text())
+        self.assertNotEqual(old.p.pid, self.clients[-1].p.pid)
+
+    def test_timeout_retires_host_and_later_call_recovers_without_replay(self):
+        self.assert_restart('time.sleep(60)', timed_out=True)
+
+    def test_eof_retires_host_and_later_call_recovers(self):
+        self.assert_restart('sys.exit(0)')
+
+    def test_malformed_json_retires_host_and_later_call_recovers(self):
+        self.assert_restart('print("not-json",flush=True);time.sleep(60)')
+
+    def test_queued_timeout_preserves_an_inflight_request(self):
+        self.host('for line in sys.stdin:\n request=json.loads(line)\n'
+                  ' Path(__file__).with_suffix(".active").write_text("active")\n'
+                  ' while not Path(__file__).with_suffix(".release").exists():\n  time.sleep(0.005)\n'
+                  ' print(json.dumps(reply(request)),flush=True)\n')
+        command = os.environ['HOST_PYTHON_STDIO']
+        client = transport._Stdio(command)
+        result = []
+        def first():
+            try:
+                result.append(client.call('urn:wm:probe', {'value': 1}, '', timeout=5))
+            except Exception as error:
+                result.append(error)
+        thread = threading.Thread(target=first)
+        thread.start()
+        active = Path(shlex.split(command)[-1]).with_suffix('.active')
+        deadline = time.monotonic() + 2
+        while not active.exists() and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        try:
+            self.assertTrue(active.exists(), result)
+            with self.assertRaises(TimeoutError):
+                client.call('urn:wm:probe', {'value': 2}, '', timeout=0.05)
+        finally:
+            active.with_suffix('.release').touch()
+            thread.join(timeout=3)
+        self.assertEqual({'value': 1}, result[0]['output'])
+        self.assertIsNone(client.p.poll())
+        self.assertEqual({'value': 3}, client.call('urn:wm:probe', {'value': 3}, '', timeout=2)['output'])
+
+    def test_concurrent_first_callers_share_one_host(self):
+        self.host('for line in sys.stdin:\n print(json.dumps(reply(json.loads(line))),flush=True)\n')
+        self.spawn_delay = 0.03
+        barrier = threading.Barrier(6)
+        def invoke(number):
+            barrier.wait(timeout=3)
+            return transport.call('python', 'stdio', 'urn:wm:probe', {'number': number})
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            results = list(pool.map(invoke, range(6)))
+        self.assertEqual(1, len(self.clients))
+        self.assertEqual([{'number': n} for n in range(6)], [r['output'] for r in results])
+
+    def test_repeated_calls_reuse_and_close_the_worker(self):
+        self.host('for line in sys.stdin:\n print(json.dumps(reply(json.loads(line))),flush=True)\n')
+        for number in range(3):
+            self.assertEqual({'number': number}, self.call({'number': number})['output'])
+        self.assertEqual(1, len(self.clients))
+        client = self.clients[0]
+        client.close()
+        self.assertFalse(client.worker.is_alive())
+        self.assertIsNotNone(client.p.poll())
+        self.assertTrue(client.p.stdin.closed and client.p.stdout.closed)
+
+    @unittest.skipUnless(os.name == 'posix', 'signal zero is a nondestructive process probe on POSIX')
+    def test_normal_interpreter_shutdown_reaps_cached_host(self):
+        self.host('for line in sys.stdin:\n print(json.dumps(reply(json.loads(line))),flush=True)\n')
+        result = subprocess.run([sys.executable, '-c',
+            'import json;from gateway import transport;'
+            'result=transport.call("python","stdio","urn:wm:probe",{"value":1});'
+            'client=transport._stdio[transport.addr("python","stdio")];'
+            'print(json.dumps({"result":result,"pid":client.p.pid}),flush=True)'],
+            cwd=transport.ROOT, capture_output=True, text=True, timeout=5, check=True)
+        observed = json.loads(result.stdout)
+        self.assertIs(observed['result']['ok'], True)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(observed['pid'], 0)
 
 
 if __name__ == '__main__':
