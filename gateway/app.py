@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -14,6 +15,13 @@ from urllib.parse import parse_qs, urlparse
 from . import core, transport
 
 UI = core.ROOT / "gateway" / "ui" / "index.html"
+
+
+def _finite_float(token):
+    number = float(token)
+    if not math.isfinite(number):
+        raise ValueError("expected finite JSON number")
+    return number
 
 
 class H(BaseHTTPRequestHandler):
@@ -27,7 +35,8 @@ class H(BaseHTTPRequestHandler):
 
     def _body(self):
         n = int(self.headers.get("content-length", 0))
-        return json.loads(self.rfile.read(n) or b"{}") if n else {}
+        return json.loads(self.rfile.read(n) or b"{}", parse_float=_finite_float,
+                          parse_constant=_finite_float) if n else {}
 
     def _q(self):
         u = urlparse(self.path)

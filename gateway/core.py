@@ -40,10 +40,25 @@ def _schema(name: str, kind: str) -> dict:
     return json.loads((ROOT / "gen/jsonschema" / f"{name}.{kind}.json").read_text())
 
 
+def _json_error(value) -> str | None:
+    try:
+        json.dumps(value, allow_nan=False)
+    except (TypeError, ValueError, OverflowError, RecursionError):
+        return "expected finite JSON value"
+    return None
+
+
 def validate(value, schema: dict, defs: dict | None = None, path: str = "$") -> list[str]:
+    if problem := _json_error(value):
+        return [f"{path}: {problem}"]
+    return _validate(value, schema, defs, path)
+
+
+def _validate(value, schema: dict, defs: dict | None = None, path: str = "$") -> list[str]:
+    """Apply schema rules after the complete value passed JSON preflight once."""
     defs = defs if defs is not None else schema.get("$defs", {})
     if "$ref" in schema:
-        return validate(value, defs[schema["$ref"].split("/")[-1]], defs, path)
+        return _validate(value, defs[schema["$ref"].split("/")[-1]], defs, path)
     t = schema.get("type")
     checks = {"object": dict, "array": list, "string": str, "boolean": bool}
     if t in checks and not isinstance(value, checks[t]):
@@ -67,10 +82,10 @@ def validate(value, schema: dict, defs: dict | None = None, path: str = "$") -> 
             errs += [f"{path}.{k}: unknown field" for k in value if k not in props]
         for k, v in value.items():
             if k in props:
-                errs += validate(v, props[k], defs, f"{path}.{k}")
+                errs += _validate(v, props[k], defs, f"{path}.{k}")
     if t == "array":
         for i, v in enumerate(value):
-            errs += validate(v, schema.get("items", {}), defs, f"{path}[{i}]")
+            errs += _validate(v, schema.get("items", {}), defs, f"{path}[{i}]")
     return errs
 
 
@@ -83,7 +98,10 @@ def invoke(urn_or_name: str, data: dict, transport_name: str | None = None, trac
     if urn not in CELLS:
         return {"ok": False, "urn": urn, "error": "unknown urn", "trace_id": trace_id}
     meta = CELLS[urn]
-    errs = validate(data, _schema(meta["name"], "input"))
+    if problem := _json_error(data):
+        return {"urn": urn, "ok": False, "output": None, "error": "input JSON: " + problem,
+                "lang": meta["owner"], "transport": tr, "trace_id": trace_id}
+    errs = _validate(data, _schema(meta["name"], "input"))
     if errs:
         r = {"urn": urn, "ok": False, "output": None, "error": "input contract: " + "; ".join(errs), "lang": meta["owner"],
              "transport": tr}
@@ -195,6 +213,8 @@ def _plan(p: dict, tr: str) -> dict:
 
 def run_process(name: str, data: dict, tr: str | None = None) -> dict:
     tr = tr or DEFAULT_TRANSPORT
+    if problem := _json_error(data):
+        raise ValueError("input JSON: " + problem)
     p = deepcopy(PROCESSES[name])
     pl = _plan(p, tr)
     trace_id = uuid.uuid4().hex[:16]
