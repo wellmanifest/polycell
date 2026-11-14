@@ -16,6 +16,15 @@ from standard.conformance import run as conformance
 
 
 class ProcessGuardTests(unittest.TestCase):
+    def test_finite_json_input_is_rejected_before_plan_dispatch_or_persistence(self):
+        for data in ({'unused': float('nan')}, {'unused': [float('inf')]}, {'unused': {'x': -float('inf')}}):
+            with self.subTest(data=data), patch.object(core, '_plan') as planner:
+                with self.assertRaisesRegex(ValueError, 'input JSON'):
+                    core.run_process('probe', data)
+                planner.assert_not_called()
+                self.dispatch.assert_not_called()
+                self.database.insert.assert_not_called()
+
     def setUp(self):
         urn = "urn:wm:cell:test:guard.probe:v1"
         self.process = {
