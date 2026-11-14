@@ -144,13 +144,24 @@ if grep -Eiq '^-[[:space:]]+\*\*Status\*\*:[[:space:]]*IN_PROGRESS([[:space:]]|$
     exit 0
   fi
 
+  # NUL-framed rename records carry both paths. Moving a material file into
+  # tracking storage still changes the material source at its previous path.
   material=false
-  while IFS= read -r -d '' path; do
-    case "$path" in
-      project/ticket-*/*|TODO.md|project/TICKETS.md|config/artifact-registry.json) ;;
-      *) material=true; break ;;
-    esac
-  done < <(git diff --cached --name-only -z --diff-filter=AM --)
+  while IFS= read -r -d '' change; do
+    IFS= read -r -d '' path || break
+    change_paths=("$path")
+    if [[ "$change" == R* ]]; then
+      IFS= read -r -d '' path || break
+      change_paths+=("$path")
+    fi
+    for path in "${change_paths[@]}"; do
+      case "$path" in
+        project/ticket-*/*|TODO.md|project/TICKETS.md|config/artifact-registry.json) ;;
+        *) material=true; break ;;
+      esac
+    done
+    if [[ "$material" == true ]]; then break; fi
+  done < <(git diff --cached --name-status -z --diff-filter=AMR --)
   if [[ "$material" != true ]]; then
     echo "GOV-AGENT-HOST-007: staged change contains only ticket tracking carriers." >&2
     echo "  Add a material deliverable, or emit an external no-change receipt without committing." >&2

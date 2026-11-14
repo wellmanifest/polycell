@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 LEASE_SCHEMA = "wellmanifest.change-lease/v1"
 REQUEST_SCHEMA = "wellmanifest.change-lease-transition/v1"
@@ -392,6 +393,30 @@ def read_writer_lease(path: Path) -> dict[str, Any]:
         os.close(descriptor)
 
 
+def canonical_owner_repository(url: str) -> str | None:
+    """Return the ``owner/name`` repository identity an origin URL carries.
+
+    Mirrors the allocator's canonical repository URI reduction so a lease can
+    bind either the canonical identity or the legacy ``local/<digest>`` label.
+    """
+    value = (url or "").strip()
+    if not value:
+        return None
+    match = re.fullmatch(r"git@([^:]+):(.+?)(?:\.git)?", value)
+    if match:
+        value = f"ssh://git@{match.group(1)}/{match.group(2)}"
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return None
+    parts = [part for part in parsed.path.strip("/").split("/") if part]
+    if parts:
+        parts[-1] = parts[-1].removesuffix(".git")
+    if len(parts) == 2 and parsed.netloc and all(part not in {"", ".", ".."} for part in parts):
+        return "/".join(parts)
+    return None
+
+
 def check_writer(root: Path, ref: str, operation: str, actor: str, session: str,
                  revision: str, fencing: str) -> list[dict[str, Any]]:
     """Read the canonical controller projection; never renew or accept handoffs.
@@ -441,8 +466,16 @@ def check_writer(root: Path, ref: str, operation: str, actor: str, session: str,
         if errors:
             return errors
         repository = "local/" + hashlib.sha256(str(primary).encode("utf-8")).hexdigest()
+        accepted_repositories = {repository}
+        try:
+            canonical = canonical_owner_repository(git("config", "--get", "remote.origin.url"))
+        except subprocess.SubprocessError:
+            canonical = None
+        if canonical:
+            accepted_repositories.add(canonical)
         if (lease["branchRef"] != ref or lease["ticketId"] != ticket
-                or lease["worktreeId"] != worktree_id or lease["repositoryRef"] != repository):
+                or lease["worktreeId"] != worktree_id
+                or lease["repositoryRef"] not in accepted_repositories):
             raise ValueError("Lease repository, ticket, branch or worktree binding differs")
         if (lease["ownerActor"] != actor or lease["ownerSession"] != session
                 or lease["leaseRevision"] != int(revision) or lease["fencingToken"] != int(fencing)):

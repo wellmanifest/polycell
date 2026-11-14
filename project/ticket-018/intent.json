@@ -1,0 +1,121 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-018",
+  "summary": "Adopt published governance standard 0.20.149",
+  "workstream": "governance",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "project/ticket-018/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    ".githooks/pre-commit",
+    ".governance/agent_host_check.py",
+    ".governance/change_lease_check.py",
+    ".governance/check_required_checks.py",
+    ".governance/continuity_namespace.py",
+    ".governance/docs/information/continuity-namespaces.md",
+    ".governance/error/GOV-IDLE-TAKEOVER.md",
+    ".governance/error/GOV-TICKET-ALLOCATION.md",
+    ".governance/error/GOV-WORK-CONTINUITY.md",
+    ".governance/governance_check.py",
+    ".governance/idle_takeover.py",
+    ".governance/manifest.base.json",
+    ".governance/manifest.json",
+    ".governance/manifest.lock.json",
+    ".governance/package-manifest.json",
+    ".governance/required-checks.schema.json",
+    ".governance/terminal_lease_release.py",
+    ".governance/ticket_restoration.py",
+    ".governance/work_continuity.py",
+    "project/new-ticket.sh"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "61ad9d72532fe86ef4478c441f7d54f55420ee76",
+    "architecture": {
+      "components": [
+        {
+          "name": "immutable-standard-adoption",
+          "paths": [
+            ".githooks/pre-commit",
+            ".governance/agent_host_check.py",
+            ".governance/change_lease_check.py",
+            ".governance/check_required_checks.py",
+            ".governance/continuity_namespace.py",
+            ".governance/docs/information/continuity-namespaces.md",
+            ".governance/error/GOV-IDLE-TAKEOVER.md",
+            ".governance/error/GOV-TICKET-ALLOCATION.md",
+            ".governance/error/GOV-WORK-CONTINUITY.md",
+            ".governance/governance_check.py",
+            ".governance/idle_takeover.py",
+            ".governance/manifest.base.json",
+            ".governance/manifest.json",
+            ".governance/manifest.lock.json",
+            ".governance/package-manifest.json",
+            ".governance/required-checks.schema.json",
+            ".governance/terminal_lease_release.py",
+            ".governance/ticket_restoration.py",
+            ".governance/work_continuity.py",
+            "project/new-ticket.sh"
+          ]
+        }
+      ],
+      "dataChanges": [
+        {
+          "component": "immutable-standard-adoption",
+          "description": "Immutable standard package and adoption lock",
+          "kind": "component-local-state"
+        }
+      ],
+      "decision": "Native allocation independently recomputes the exact published package and target state. Only its closed adoption paths are admitted; protected authority remains separate.",
+      "interfaceChanges": [],
+      "responsibilityChanges": false,
+      "rollback": "Revert through protected review; preserve the previous immutable adoption pin.",
+      "status": "accepted",
+      "ui": {
+        "evidence": [],
+        "impact": "none",
+        "states": []
+      }
+    },
+    "budgets": {
+      "maxAffectedComponents": 1,
+      "maxImplementationFiles": 15,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "complexity": "L",
+    "estimatedMinutes": 120,
+    "nonGoals": [
+      "Allocation grants no editing or publication authority",
+      "Preserve local overrides and unrelated implementation"
+    ],
+    "outcome": "Adopt the complete verified immutable wellmanifest/new-project package.",
+    "runtimeDependencies": [],
+    "standardAdoption": {
+      "fromRevision": "511eb0ab1c0f9f8697c44f5748ba93b25da5e0d9",
+      "sourceRepository": "wellmanifest/new-project",
+      "toRevision": "c3aa6c0c35d6408cdb4b6bd10086baef7e77f3a6"
+    },
+    "targetBranch": "main",
+    "validation": [
+      {
+        "commands": [
+          "./project/governance-check.sh"
+        ],
+        "criterion": "AC-01",
+        "evidence": "Complete immutable package, exact-base scope and independent protected publication"
+      }
+    ]
+  }
+}
