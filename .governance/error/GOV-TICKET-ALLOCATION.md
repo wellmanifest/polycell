@@ -47,6 +47,18 @@ Ręczne `mkdir`, skopiowanie katalogu albo sam `fetch` nie tworzą rezerwacji.
    `intent.json`; ponowienie po przerwaniu kończy brakujące kroki, a gotowy
    stan zwraca `ALREADY_RESTORED`. Nie daje prawa do edycji ani merge: dalej
    obowiązuje `work_start_check.py --ticket`.
+8. Dla istniejącej rezerwacji `local-single-clone` bez zewnętrznego store użyj
+   jawnego `--restore-local-request FILE`, z własnym writer actor/session oraz
+   `NEW_PROJECT_LEASE_REVISION` i `NEW_PROJECT_FENCING_TOKEN`. Request ma te same
+   pola co zewnętrzny, schema `new-project.local-ticket-restoration-request/v1`
+   i dodatkowe `reservationSha256`: SHA-256 dokładnych bajtów kanonicznego
+   `.subactor/leases/{worktreeId}.json`. CAS i właściciel odnoszą się do tego
+   pliku. Kontroler utrzymuje jego blokadę, sprawdza repozytorium i zakres oraz
+   ponawia kontrolę przed każdym skutkiem. Nie przekazuj `--recovery-lease-store`
+   w tej ścieżce; odmowa store nigdy nie przełącza automatycznie na local.
+   Wygasła, zamrożona lub zwolniona rezerwacja jest odrzucana. Najpierw wymagane
+   jest osobne, uprawnione przejęcie przez kontroler; restoration nie odnawia
+   lease, nie zwiększa fencing i nie przywraca źródeł ze snapshotu.
 
 ## Verification
 

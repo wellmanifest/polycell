@@ -468,7 +468,7 @@ def check_declaration(
     return findings
 
 
-def workflow_job_names(path: Path) -> list[str]:
+def required_checks_validator():
     """Use the adjacent managed validator for the offline workflow contract.
 
     Load by the package path, never by a target-controlled import search path.
@@ -483,7 +483,11 @@ def workflow_job_names(path: Path) -> list[str]:
         raise ImportError("managed required-checks validator is missing")
     checker = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(checker)
-    return checker.workflow_job_names(path)
+    return checker
+
+
+def workflow_job_names(path: Path) -> list[str]:
+    return required_checks_validator().workflow_job_names(path)
 
 
 def check_guidance_anomalies(root: Path, contract: dict[str, Any]) -> list[Finding]:
@@ -611,6 +615,18 @@ def check_guidance_anomalies(root: Path, contract: dict[str, Any]) -> list[Findi
         pairs = [(str(name), declaration["workflowFile"])
                  for name in declaration["requiredCheckNames"]
                  if isinstance(name, str)]
+    if "externalChecks" in declaration:
+        try:
+            external = required_checks_validator().external_check_names(declaration)
+        except (OSError, UnicodeDecodeError, ImportError, AttributeError, ValueError, SystemExit):
+            findings.append(Finding(
+                "GOV-AGENT-HOST-004",
+                "CI external required-check declaration cannot be resolved.",
+                "Restore the managed validator and an explicit supported producer binding; run check_required_checks.py for the precise refusal.",
+                [str(checks_path.relative_to(root))],
+            ))
+            return findings
+        pairs = [(name, workflow) for name, workflow in pairs if name not in external]
     if not pairs:
         findings.append(Finding(
             "GOV-AGENT-HOST-004",

@@ -506,14 +506,23 @@ def load_local_manifest(root: Path) -> dict[str, Any]:
     return validate_manifest_value(load_json(root / ".subactor" / "manifest.json"))
 
 
+def namespace_module():
+    spec = importlib.util.spec_from_file_location(
+        "_continuity_namespace", Path(__file__).with_name("continuity_namespace.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def storage_paths(root: Path) -> tuple[Path, Path, int, int]:
     continuity = load_local_manifest(root)["continuity"]
-    return (
+    legacy = (
         root / continuity["eventStreamPath"],
         root / continuity["checkpointIndexPath"],
         continuity["checkpointIndexMaxEntries"],
         continuity["checkpointIndexMaxBytes"],
     )
+    return namespace_module().select(root, repository_ref(root), legacy, sys.modules[__name__])
 
 
 
@@ -1394,6 +1403,11 @@ def parser() -> argparse.ArgumentParser:
     pin_parser = subparsers.add_parser("verify-pin", help="validate only the local immutable standard pin")
     pin_parser.add_argument("--root", type=Path, default=Path.cwd())
     pin_parser.add_argument("--staged", action="store_true", help="read managed candidates from the Git index")
+    namespace_parser = subparsers.add_parser("init-namespace", help="plan an isolated repository advisory store")
+    namespace_parser.add_argument("--root", type=Path, default=Path.cwd())
+    namespace_parser.add_argument("--expected-legacy-repository", required=True)
+    namespace_parser.add_argument("--expected-legacy-sha256", required=True)
+    namespace_parser.add_argument("--apply", action="store_true")
     return result
 
 
@@ -1413,6 +1427,8 @@ def main() -> int:
             output = verify(args)
         elif args.command == "rebuild-index":
             output = rebuild_index(args)
+        elif args.command == "init-namespace":
+            output = namespace_module().initialize(args, sys.modules[__name__])
         else:
             output = verify_pin(args)
         print(json.dumps(output, indent=2, sort_keys=True, ensure_ascii=False))

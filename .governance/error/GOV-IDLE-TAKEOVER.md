@@ -13,6 +13,48 @@ observed activity, and keeps a board of every ticket's state for the next agent.
 - `GOV-IDLE-TAKEOVER-002`: the observation or a snapshot, receipt, lease or
   board write failed.
 
+### Explicit local lease continuation
+
+Standard0.20.149 adds two explicit controller operations. Ordinary `observe`
+and `takeover` keep their existing refusal states. A timeout or a metadata
+snapshot alone never transfers ownership.
+
+`idle_takeover.py --root PRIMARY recover-reservation --request FILE --actor ID
+--session ID` accepts a closed `new-project.expired-reservation-recovery/v1`
+request with `requestId`, `workstream`, and `restoration`. The latter is the
+existing `new-project.local-ticket-restoration-request/v1` object, including
+the exact old reservation SHA-256, owner, revision/fence, metadata snapshot
+path/digest and optional exact restoration HEAD. Both input files must be
+outside checkouts. The caller supplies a fresh identity, never the old holder's
+identity. Recovery requires enabled manifest idle policy, an expired idle lease,
+no registered checkout or branch, no integrated metadata and no observable
+process in the missing path (including Linux deleted-cwd processes).
+Released and frozen/publication-owned leases refuse. This operation requires
+Linux process observation; it is not a multi-node controller.
+
+The pinned canonical `expire`/`release` transitions and a fresh claim advance
+revision and fencing. The result names the canonical worktree/branch, its new
+`writerEnvironment`, and `restorationRequest` for the existing native
+`new-ticket.sh --restore-local-request` route. It restores no source bytes,
+reserves no new number and grants neither editing nor publication. After
+restoration, run the normal work-start/governance gates before writing.
+
+`idle_takeover.py --root OWNED_CHECKOUT checkpoint-owner --request FILE --actor
+ID --session ID` accepts `new-project.owner-lease-checkpoint/v1` with
+`requestId`, `ticket`, `reservationSha256`, `leaseRevision` and `fencingToken`.
+It requires the same current live owner and canonical branch, captures its
+actual Git HEAD through a canonical heartbeat, and does not extend expiry or
+change scope/owner. Frozen, expired and released leases refuse. Use the returned
+fencing values; old tokens no longer authorize a write. This POSIX operation
+does not establish review, merge or release provenance.
+
+Both operations hold the existing per-lease lock, revalidate state after
+preparation, and use anchored atomic storage. Prepare/result records in
+`.subactor/receipts/lease-continuation/` bind request identity and both lease
+hashes. An interrupted final receipt can replay the same claim; it cannot
+renew a lease or apply a changed request. Retain divergent preparations for
+reconciliation rather than overwriting a current owner.
+
 ### Policy (single source: the governance manifest)
 
 ```json
