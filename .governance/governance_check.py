@@ -3123,7 +3123,7 @@ def check_version_parity(root: Path, manifest: dict[str, Any], report: Report) -
     }
     resolved_root = root.resolve()
     max_init_bytes = 1024 * 1024
-    for init_file in root.glob("**/__init__.py"):
+    for init_file in version_scan_initializers(root):
         rel_parts = init_file.relative_to(root).parts
         if any(part in skip_dirs for part in rel_parts):
             continue
@@ -3178,6 +3178,25 @@ def check_version_parity(root: Path, manifest: dict[str, Any], report: Report) -
                     )
         except (OSError, UnicodeDecodeError, ValueError):
             pass
+
+
+def version_scan_initializers(root: Path) -> list[Path]:
+    """Return package initializers owned by this repository.
+
+    Local runtime directories (``.run``, virtualenvs, build caches) are not
+    repository state even when they are absent from the static skip set. Git
+    owns the ignore rules, so honor .gitignore/.git/info/exclude here; a
+    non-Git checkout keeps the previous full scan.
+    """
+    try:
+        raw = git_output(root, ["ls-files", "-co", "--exclude-standard", "-z"])
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return list(root.glob("**/__init__.py"))
+    names = raw.decode("utf-8", "surrogateescape").split("\0")
+    return [candidate for name in names
+            if name == "__init__.py" or name.endswith("/__init__.py")
+            for candidate in (root / name,)
+            if candidate.is_file()]
 
 
 def immutable_image_reference(reference: str) -> bool:
@@ -4987,18 +5006,20 @@ def resolve_validation_base(
 
 
 def check_change_lease(root: Path, report: Report) -> None:
-    candidates = [
-        root / "scripts" / "change_lease_check.py",
-        root / ".governance" / "change_lease_check.py",
-    ]
-    checker = next((path for path in candidates if path.is_file()), None)
-    if checker is None:
+    # The inspected repository is data, not a source of executable validator
+    # code. Use the helper shipped with this particular validator instead.
+    checker = Path(__file__).resolve().with_name("change_lease_check.py")
+    if checker.is_symlink() or not checker.is_file():
+        report.add(
+            "GOV-CHANGE-LEASE-001", "The validator's change-lease checker is missing or not a regular file.",
+            "Restore the complete trusted new-project validator package.",
+        )
         return
     spec = importlib.util.spec_from_file_location("new_project_change_lease_check", checker)
     if spec is None or spec.loader is None:
         report.add(
             "GOV-CHANGE-LEASE-001", "Could not load the managed change-lease checker.",
-            "Restore the managed checker from the pinned new-project package.", [rel(root, checker)],
+            "Restore the managed checker from the pinned new-project package.",
         )
         return
     module = importlib.util.module_from_spec(spec)
@@ -5013,7 +5034,7 @@ def check_change_lease(root: Path, report: Report) -> None:
     except Exception as error:
         report.add(
             "GOV-CHANGE-LEASE-001", f"Change-lease validation failed closed: {error}",
-            "Repair the managed checker or lease evidence before continuing.", [rel(root, checker)],
+            "Repair the managed checker or lease evidence before continuing.",
         )
         return
     for item in findings:

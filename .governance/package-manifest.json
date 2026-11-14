@@ -338,6 +338,18 @@
       "executable": true
     },
     {
+      "source": "scripts/continuity_namespace.py",
+      "target": ".governance/continuity_namespace.py",
+      "strategy": "managed",
+      "executable": false
+    },
+    {
+      "source": "docs/information/continuity-namespaces.md",
+      "target": ".governance/docs/information/continuity-namespaces.md",
+      "strategy": "managed",
+      "executable": false
+    },
+    {
       "source": "scripts/ticket_input.py",
       "target": ".governance/ticket_input.py",
       "strategy": "managed",

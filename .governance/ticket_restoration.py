@@ -10,6 +10,7 @@ admission and independent review remain mandatory afterwards.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -35,9 +36,14 @@ METADATA = ("README.md", "intent.json")
 RESTORING_PHASES = {"claimed", "editing"}
 
 
-def validate_request(request, workstream):
-    require(isinstance(request, dict) and set(request) == FIELDS
-            and request["schema"] == "new-project.ticket-restoration-request/v1", "Invalid restoration request")
+def validate_request(request, workstream, local=False):
+    fields = FIELDS | {"reservationSha256"} if local else FIELDS
+    schema = "new-project.local-ticket-restoration-request/v1" if local else "new-project.ticket-restoration-request/v1"
+    require(isinstance(request, dict) and set(request) == fields
+            and request["schema"] == schema, "Invalid restoration request")
+    if local:
+        require(isinstance(request["reservationSha256"], str)
+                and re.fullmatch(r"[0-9a-f]{64}", request["reservationSha256"]), "Invalid reservation digest")
     ticket = request["ticket"]
     require(isinstance(ticket, str) and re.fullmatch(r"ticket-[0-9]{3,}", ticket), "Invalid ticket identity")
     require(isinstance(request["worktreeId"], str) and re.fullmatch(
@@ -135,6 +141,47 @@ def controller(store, request, record, intent, repository):
     return lease
 
 
+@contextmanager
+def authority(primary, store, request, record, intent, repository, local_owner):
+    """Hold the selected authority lock; never fall back between owner backends."""
+    if local_owner is None:
+        with recovery.controller_lock(store):
+            yield lambda: controller(store, request, record, intent, repository)
+        return
+    import terminal_lease_release as anchored
+    path = primary / ".subactor/leases" / (request["worktreeId"] + ".json")
+    with anchored.directory(path.parent) as (fd, verify):
+        with anchored.lease_lock(fd, path.name, verify) as verify_lock:
+            def check():
+                verify_lock()
+                raw = anchored.read_at(fd, path.name, private=True)
+                info = os.stat(path.name, dir_fd=fd, follow_symlinks=False)
+                require(info.st_uid == os.geteuid(), "Reservation belongs to another OS owner")
+                require(hashlib.sha256(raw).hexdigest() == request["reservationSha256"], "Reservation changed")
+                lease = json.loads(raw, object_pairs_hook=unique)
+                require(lease == record, "Reservation changed before locking")
+                require(not anchored.canonical.validate_lease(lease), "Invalid local lease")
+                expected = {key: request[key] for key in
+                            ("leaseId", "leaseRevision", "fencingToken", "ownerActor", "ownerSession")}
+                expected.update(ticketId=request["ticket"], worktreeId=request["worktreeId"],
+                                branchRef=record["branchRef"], targetBranch=record["targetBranch"],
+                                workstream=record["workstream"], scopeHash=start.digest(intent["allowedPaths"]))
+                require(all(lease.get(k) == v for k, v in expected.items()), "Local owner, scope or CAS mismatch")
+                require(tuple(str(request[k]) for k in ("ownerActor", "ownerSession", "leaseRevision", "fencingToken"))
+                        == tuple(local_owner), "Explicit current writer identity required")
+                legacy = "local/" + hashlib.sha256(str(primary).encode()).hexdigest()
+                require(lease["repositoryRef"] in {repository, legacy}, "Local repository mismatch")
+                require(lease["phase"] in RESTORING_PHASES and not lease["publicationFrozen"], "Local lease is frozen or inactive")
+                issued, heartbeat, expires = (datetime.fromisoformat(lease[k].replace("Z", "+00:00"))
+                                               for k in ("issuedAt", "heartbeatAt", "expiresAt"))
+                require(all(t.tzinfo is not None for t in (issued, heartbeat, expires))
+                        and issued <= heartbeat <= datetime.now(timezone.utc) < expires,
+                        "Expired lease; explicit controller handoff required")
+                verify_lock()
+                return lease
+            yield check
+
+
 def observe(primary, request, record, files, intent):
     """Return the exact current restoration state; reject every collision."""
     ticket, branch = request["ticket"], record["branchRef"]
@@ -205,9 +252,11 @@ def write_new(common, path, content):
             pass
 
 
-def restore(root, request_path, store, workstream):
+def restore(root, request_path, store, workstream, *, local_owner=None):
     require(os.name == "posix" and hasattr(os, "O_NOFOLLOW"), "POSIX local controller adapter required")
-    root, store, request_path = map(safe, (root, store, request_path))
+    root, request_path = map(safe, (root, request_path))
+    require((store is None) == (local_owner is not None), "Select exactly one restoration authority")
+    store = safe(store) if store is not None else None
     common = safe(start.git(root, "rev-parse", "--path-format=absolute", "--git-common-dir").strip())
     primary = safe(start.worktrees(root)[0]["worktree"])
     require(start.configured_mode(primary) == "files" and not (primary / "project.sqlite").exists(),
@@ -220,37 +269,42 @@ def restore(root, request_path, store, workstream):
     lock = safe(common / "new-project-ticket-allocation.lock")
     lock.mkdir()  # same non-stealable clone lock as allocation and recovery
     try:
-        with recovery.controller_lock(store):
-            request = recovery.load(request_path)
-            validate_request(request, workstream)
-            for location in start.worktrees(primary):
-                checkout = safe(location["worktree"])
-                require(not any(p.is_relative_to(checkout) for p in (store, request_path, Path(request["snapshotPath"]))),
-                        "Controller, request and snapshot must be outside all checkouts")
-            require(not store.is_relative_to(common), "Controller cannot be stored in candidate Git metadata")
-            files, intent = load_snapshot(request, workstream)
-            record = reservation(primary, common, request, workstream)
-            origin = urlparse(canonical_repository_ref(start.git(primary, "config", "--get", "remote.origin.url").strip()))
-            require(origin.hostname == "github.com" and origin.scheme in {"https", "git+ssh"},
-                    "This controller adapter requires a canonical GitHub repository")
-            repository = origin.path.lstrip("/")
-            lease = controller(store, request, record, intent, repository)
+        request = recovery.load(request_path)
+        validate_request(request, workstream, local_owner is not None)
+        locations = (request_path, safe(request["snapshotPath"])) + ((store,) if store is not None else ())
+        for location in start.worktrees(primary):
+            checkout = safe(location["worktree"])
+            require(not any(p.is_relative_to(checkout) for p in locations),
+                    "Controller, request and snapshot must be outside all checkouts")
+        require(not any(p.is_relative_to(common) for p in locations), "Recovery inputs cannot reside in Git metadata")
+        files, intent = load_snapshot(request, workstream)
+        record = reservation(primary, common, request, workstream)
+        origin = urlparse(canonical_repository_ref(start.git(primary, "config", "--get", "remote.origin.url").strip()))
+        require(origin.hostname == "github.com" and origin.scheme in {"https", "git+ssh"},
+                "This controller adapter requires a canonical GitHub repository")
+        repository = origin.path.lstrip("/")
+        with authority(primary, store, request, record, intent, repository, local_owner) as check:
+            lease = check()
             state = observe(primary, request, record, files, intent)
             steps = []
             if state["branchHead"] is None:
+                check()
                 start.git(primary, "update-ref", record["branchRef"], state["target"], "")  # create-only CAS
                 steps.append("branch")
             if not state["registered"]:
+                check()
                 name = record["branchRef"].removeprefix("refs/heads/")
                 start.git(primary, "worktree", "add", "--relative-paths", str(state["canonical"]), name)
                 steps.append("checkout")
             state = observe(primary, request, record, files, intent)
-            controller(store, request, record, intent, repository)
+            check()
             if not state["committed"]:
                 directory = state["canonical"] / "project" / request["ticket"]
+                check()
                 directory.mkdir(exist_ok=True)
                 for name in METADATA:
                     if name not in state["present"]:
+                        check()
                         write_new(common, directory / name, files[name])
                         steps.append(name)
             return {"schema": "new-project.ticket-restoration-result/v1", "ticket": request["ticket"],
@@ -271,11 +325,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--request", type=Path, required=True)
-    parser.add_argument("--lease-store", type=Path, required=True)
+    backend = parser.add_mutually_exclusive_group(required=True)
+    backend.add_argument("--lease-store", type=Path)
+    backend.add_argument("--local-reservation", action="store_true")
+    for name, variable in (("actor", "WRITER_ACTOR"), ("session", "WRITER_SESSION"),
+                           ("revision", "LEASE_REVISION"), ("fencing", "FENCING_TOKEN")):
+        parser.add_argument("--" + name, default=os.environ.get("NEW_PROJECT_" + variable, ""))
     parser.add_argument("--workstream", required=True)
     args = parser.parse_args()
     try:
-        print(json.dumps(restore(args.root, args.request, args.lease_store, args.workstream)))
+        owner = (args.actor, args.session, args.revision, args.fencing) if args.local_reservation else None
+        print(json.dumps(restore(args.root, args.request, args.lease_store, args.workstream, local_owner=owner)))
         return 0
     except recovery.RecoveryError as error:
         print("GOV-TICKET-ALLOCATION-003: " + str(error) + "; preserve work and re-observe before retry.", file=sys.stderr)
