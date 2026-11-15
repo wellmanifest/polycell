@@ -1,0 +1,98 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-035",
+  "summary": "Reject nonfinite JSON before MCP dispatch",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P2",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-035/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "gateway/mcp.py",
+    "tests/test_mcp.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "516fe92072f00ee0ad71e2b33b02ec3bed4fa8a8",
+    "targetBranch": "main",
+    "outcome": "Reject nonfinite decoded JSON at MCP stdio ingress before any dispatch; return Parse error with null id and continue processing subsequent valid messages.",
+    "nonGoals": [
+      "No claim about earlier timing failures or upstream Forge",
+      "No watchdog, assertion, public interface, dependency or release changes",
+      "Preserve foreign ticket034 package work and all foreign workspace data"
+    ],
+    "complexity": "XS",
+    "estimatedMinutes": 10,
+    "budgets": {
+      "maxImplementationFiles": 2,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "After decoding each wire message, validate that the decoded tree can be represented as finite JSON using json.dumps allow_nan=False inside the existing parse exception boundary. Preserve quoted strings, existing error envelope and loop recovery; add real CLI and HTTP tracking regression.",
+      "components": [
+        {
+          "name": "mcp-stdio",
+          "paths": [
+            "gateway/mcp.py",
+            "tests/test_mcp.py"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Reviewed revert of this ingress guard and its regression only."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python -m unittest discover -s tests -p test_mcp.py -v"
+        ],
+        "evidence": "Real stdio regression fails on old source and passes after repair, covering constants, exponent overflow, nested arguments, no invalid HTTP dispatch, quoted literal controls and same-process recovery."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "make check",
+          "python -m pytest -q"
+        ],
+        "evidence": "All existing application controls pass with deadlines and assertions retained; full native delivery checks Python, TypeScript and Rust."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "isolated portable-project runtime qualification",
+          "bash project/governance-check.sh"
+        ],
+        "evidence": "Original generated TypeScript function passes pinned networkless runtime; exported MCP bytes equal candidate; no new inference calls or generated function edits."
+      },
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "goal --delivery-mode pull-request --no-publish -a push --ticket ticket-035 --no-version-sync --no-tag --no-changelog"
+        ],
+        "evidence": "Exact-head checks, independent trusted App review and protected merge; no manual merge or release."
+      }
+    ]
+  }
+}

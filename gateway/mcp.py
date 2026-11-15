@@ -95,6 +95,8 @@ def main():
             continue
         try:
             message = json.loads(line)
+            # Reject nonfinite constants and exponent overflow before dispatch.
+            json.dumps(message, allow_nan=False)
         except (ValueError, RecursionError):
             out = error_response(None, -32700, "Parse error")
         else:
