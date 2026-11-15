@@ -248,6 +248,113 @@ class FeedbackTests(unittest.TestCase):
                 self.run_loop()
             proposals.assert_not_called()
 
+    def proposal_case(self, name):
+        here = self.root / name
+        self.base = here / 'baseline'
+        self.manifest = package.export('shipping.cost', self.base)
+        self.source = (self.base / 'cell.py').read_text()
+        self.out, self.audit = here / 'candidate', here / 'audit'
+
+    def proposal_tree(self):
+        return {str(p.relative_to(self.root)): ('link', str(p.readlink())) if p.is_symlink()
+                else ('file', p.read_bytes()) if p.is_file() else ('directory',)
+                for p in self.root.rglob('*')}
+
+    def reject_proposal_paths(self, message):
+        before = self.proposal_tree()
+        with self.provider(return_value=json.dumps(self.answer()).encode()) as provider:
+            with self.assertRaisesRegex(ValueError, message):
+                forge.propose(self.base, self.out, self.audit, 'fixture', 'http://localhost',
+                              'Regenerate the entire file')
+            provider.assert_not_called()
+        self.assertEqual(before, self.proposal_tree())
+        package.verify(self.base)
+
+    def test_proposal_paths_cannot_add_output_or_audit_to_baseline(self):
+        for target in ('output', 'audit'):
+            with self.subTest(target=target):
+                self.proposal_case(target)
+                if target == 'output':
+                    self.out = self.base / 'candidate'
+                else:
+                    self.audit = self.base / 'audit'
+                self.reject_proposal_paths('outside the source packages')
+
+    def test_proposal_paths_require_disjoint_output_and_audit(self):
+        for relation in ('same', 'audit-in-output', 'output-in-audit'):
+            with self.subTest(relation=relation):
+                self.proposal_case(relation)
+                if relation == 'same':
+                    self.audit = self.out
+                elif relation == 'audit-in-output':
+                    self.audit = self.out / 'audit'
+                else:
+                    self.out = self.audit / 'candidate'
+                self.reject_proposal_paths('destinations must be disjoint')
+
+    def test_proposal_paths_resolve_parent_aliases_before_effects(self):
+        for relation in ('source-alias', 'destination-alias'):
+            with self.subTest(relation=relation):
+                self.proposal_case(relation)
+                alias = self.base.parent / 'alias'
+                if relation == 'source-alias':
+                    alias.symlink_to(self.base, target_is_directory=True)
+                    self.audit = alias / 'audit'
+                    message = 'outside the source packages'
+                else:
+                    alias.symlink_to(self.base.parent, target_is_directory=True)
+                    self.out = alias / 'audit/candidate'
+                    message = 'destinations must be disjoint'
+                self.reject_proposal_paths(message)
+
+    def test_proposal_paths_preserve_occupied_and_dangling_destinations(self):
+        for target in ('output', 'audit'):
+            for kind in ('file', 'directory', 'dangling-link'):
+                with self.subTest(target=target, kind=kind):
+                    self.proposal_case(target + '-' + kind)
+                    path = self.out if target == 'output' else self.audit
+                    if kind == 'file':
+                        path.write_text('preserve existing data')
+                    elif kind == 'directory':
+                        path.mkdir()
+                        (path / 'existing').write_text('preserve existing data')
+                    else:
+                        path.symlink_to(path.parent / 'missing-target')
+                    self.reject_proposal_paths('destinations must be new')
+
+    def test_proposal_paths_allow_disjoint_complete_files_in_each_language(self):
+        for selector in ('shipping.cost', 'notify.render', 'pricing.quote'):
+            with self.subTest(selector=selector):
+                here = self.root / selector
+                self.base = here / 'baseline'
+                self.manifest = package.export(selector, self.base)
+                self.source = (self.base / self.manifest['implementation']).read_text()
+                before = {p.name: p.read_bytes() for p in self.base.iterdir()}
+                out, audit = here / 'nested/candidate', here / 'separate/audit'
+                answer = self.answer(target='generated/' + self.manifest['implementation'])
+                with self.provider(return_value=json.dumps(answer).encode()) as provider:
+                    result = forge.propose(self.base, out, audit, 'fixture', 'http://localhost',
+                                           'Regenerate the entire file')
+                provider.assert_called_once()
+                self.assertEqual('required', result['qualification'])
+                self.assertEqual(self.source, (out / self.manifest['implementation']).read_text())
+                self.assertEqual(before, {p.name: p.read_bytes() for p in self.base.iterdir()})
+                self.assertEqual(answer['bundle'], json.loads((audit / 'bundle.json').read_text()))
+                self.assertEqual('test-native-request', json.loads((audit / 'metrics.json').read_text())['request_id'])
+                package.verify(out)
+
+    def test_proposal_paths_keep_regeneration_alias_rejection_before_snapshots(self):
+        alias = self.root / 'baseline-alias'
+        alias.symlink_to(self.base, target_is_directory=True)
+        self.audit = alias / 'audit'
+        before = self.proposal_tree()
+        with patch.object(forge, 'snapshot') as snapshots, patch.object(forge, 'propose') as proposals:
+            with self.assertRaisesRegex(ValueError, 'outside the source packages'):
+                self.run_loop()
+            snapshots.assert_not_called()
+            proposals.assert_not_called()
+        self.assertEqual(before, self.proposal_tree())
+
 
 class QualificationDiagnosticTests(unittest.TestCase):
     def setUp(self):

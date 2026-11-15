@@ -85,15 +85,28 @@ def worker():
     print(json.dumps({"bundle": bundle, "metrics": provider.last_metrics}))
 
 
+def _validate_destinations(sources: tuple[Path, ...], out: Path, audit: Path) -> None:
+    """Reject destructive path layouts before audit writes or provider calls."""
+    if os.path.lexists(out) or os.path.lexists(audit):
+        raise ValueError("proposal and audit destinations must be new")
+    output, logs = out.resolve(), audit.resolve()
+    for target in (output, logs):
+        for source in sources:
+            resolved = source.resolve()
+            if target.is_relative_to(resolved) or resolved.is_relative_to(target):
+                raise ValueError("output and audit must be outside the source packages")
+    if output.is_relative_to(logs) or logs.is_relative_to(output):
+        raise ValueError("output and audit destinations must be disjoint")
+
+
 def propose(package: Path, out: Path, audit: Path, model: str, base_url: str,
             objective: str, timeout: float = 180, reasoning_effort: str | None = None) -> dict:
+    package, out, audit = (p.absolute() for p in (package, out, audit))
+    _validate_destinations((package,), out, audit)
+    manifest = verify(package)
     from forge_base.sandbox import run_bounded
     from subllm.local_runtime import render_profiles
-    manifest = verify(package)
-    if out.exists() or audit.exists():
-        raise ValueError("proposal and audit destinations must be new")
     profiles = render_profiles(base_url=base_url, model=model, routes=("heyasa/command",))
-    audit = audit.absolute()
     audit.mkdir(parents=True, mode=0o700)
     policy = audit / "subllm.toml"
     policy_text = profiles["subllm.toml"]
@@ -136,14 +149,7 @@ def regenerate(package: Path, out: Path, audit: Path, model: str, base_url: str,
     if type(attempts) is not int or not 1 <= attempts <= 3:
         raise ValueError("attempts must be between 1 and 3")
     package, oracle, out, audit = (p.absolute() for p in (package, oracle, out, audit))
-    if os.path.lexists(out) or os.path.lexists(audit):
-        raise ValueError("proposal and audit destinations must be new")
-    for target in (out.resolve(), audit.resolve()):
-        for source in (package.resolve(), oracle.resolve()):
-            if target.is_relative_to(source) or source.is_relative_to(target):
-                raise ValueError("output and audit must be outside the source packages")
-    if out.resolve().is_relative_to(audit.resolve()) or audit.resolve().is_relative_to(out.resolve()):
-        raise ValueError("output and audit destinations must be disjoint")
+    _validate_destinations((package, oracle), out, audit)
     check_oracle(package, oracle)
     audit.mkdir(parents=True, mode=0o700)
     baseline, trusted = audit / "baseline", audit / "oracle"
