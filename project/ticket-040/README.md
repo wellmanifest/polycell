@@ -30,6 +30,10 @@ dependencies, schemas, transport or package-format changes.
 Nine new regression methods expose ten failures and one dangling-output error
 on the old implementation. All nine pass after repair, as do all 245 regression
 tests, conformance, 45 parity calls, TestQL 5/5, PGlite persistence, logs and MCP.
+After integrating published MCP Unicode repair PR #39, all 247 regression tests
+and the application gates pass again. Fresh assembly retains the qualified
+package commits and includes the exact accepted MCP bytes; replay source stays
+identical to the native archive/Docker acceptance evidence.
 
 The actual replay function from accepted revision 7cc43da is also executed in
 an isolated historical probe against preserved native fixture archives. For
