@@ -3,7 +3,7 @@
 - **ID**: ticket-032
 - **Owner**: unresolved:human
 - **Status**: IN_PROGRESS
-- **Workflow state**: VALIDATION
+- **Workflow state**: PUBLICATION
 - **Created**: 2026-11-15
 
 ## Goal and scope
@@ -23,20 +23,31 @@ interface hashes intact; no business-cell, host or transport changes.
 
 - [x] AC-01: Common print/logging/stream calls in all three languages fail both PC008 conformance and package verification.
 - [x] AC-02: Literal/comment text, pure formatting and supported language constructs remain accepted; existing I/O rules remain enforced.
-- [ ] AC-03: Regression tests, bounded regeneration/real qualification, parity, TestQL, DB/MCP and governance pass before protected independent publication.
+- [x] AC-03: Regression tests, bounded regeneration/real qualification, parity, TestQL, DB/MCP and governance pass before protected independent publication.
 
-## Validation in progress
+## Validation
 
 The initial three end-to-end gate regressions exposed 30 false acceptances on
-old source. `make check test` passes 200 tests on the starting base. All seven
-purity tests also pass after extending coverage to rehashed incoming packages and
+old source. After integrating published PR #31, `make check test` passes 202
+tests. All seven purity tests cover rehashed incoming packages and
 qualification preflight. Fifteen logging variants fail conformance, package
 creation, direct verification and qualification admission; literal/comment data
 remains valid. Console parsing covers Python imports/AST, TS template expressions
 and regex literals, and Rust raw strings, comments, lifetimes and formatting.
 
-Continue with real qualification, integrated upstream checks, application parity
-and protected independent publication. Runtime evidence stays in the private cache.
+Controlled full-file provider replies exercise the real Forge bounded loop:
+each language rejects logging, preserves feedback, then accepts and qualifies
+the replacement in Docker without networking. Three one-source-file packages
+pass Git commit/bundle/clone and joint assembly/conformance. Exhaustion,
+destination collision and a real filesystem permission failure publish nothing.
+These checks use seeded replies, with zero native inference calls.
+
+The integrated application passes 45 parity calls, TestQL 5/5, three-language
+checkout, database persistence, logs and MCP. Governance passes without errors
+or warnings. The detector recognizes known APIs; it is not a formal proof of
+purity or a substitute for executable qualification. No cell, host or transport
+interfaces change. Runtime evidence stays in the private cache. Publication uses
+exact-head independent review and the protected merge controller.
 
 ## Tracking boundary
 

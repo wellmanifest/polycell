@@ -1,0 +1,98 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-031",
+  "summary": "Reap stdio hosts when worker startup fails",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-031/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "gateway/transport.py",
+    "tests/test_transport.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "0294fbc7f2888ae028c36da54684b142d749b1b7",
+    "targetBranch": "main",
+    "outcome": "Reap an already spawned stdio host and close its pipes when the worker thread cannot start; preserve the original startup exception and cache/retry semantics.",
+    "nonGoals": [
+      "No claim about the original intermittent timing cause",
+      "No deadline, assertion, dependency, function, protocol or release changes",
+      "Preserve peer030 generation repair and all foreign workspaces"
+    ],
+    "complexity": "XS",
+    "estimatedMinutes": 10,
+    "budgets": {
+      "maxImplementationFiles": 2,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Retain existing process-group cleanup and bounded wait/join. On worker.start failure use existing close lifecycle, close pipes synchronously for a never-started worker, and re-raise the original exception. Add real-subprocess failure injection and successful recovery controls.",
+      "components": [
+        {
+          "name": "stdio-transport",
+          "paths": [
+            "gateway/transport.py",
+            "tests/test_transport.py"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Reviewed revert of constructor cleanup and its regression only."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python -m unittest discover -s tests -p test_transport.py -v"
+        ],
+        "evidence": "A real child process leaks before the repair on injected thread-start failure; after the repair it is reaped, both pipes close, cache stays empty, original exception survives and a subsequent healthy request succeeds without replay."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "make check",
+          "python -m pytest -q"
+        ],
+        "evidence": "All existing assertions, host lifecycle controls and the peer027 path regressions remain valid."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "isolated portable-project runtime qualification",
+          "bash project/governance-check.sh"
+        ],
+        "evidence": "Pinned networkless runtime verifies HTTP/gRPC/stdio, persistence and MCP with the original generated function unchanged."
+      },
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "goal --delivery-mode pull-request --no-publish -a push --ticket ticket-031 --no-version-sync --no-tag --no-changelog"
+        ],
+        "evidence": "Author delivery, exact-head required checks, independent review and protected merge; no manual merge or release."
+      }
+    ]
+  }
+}
