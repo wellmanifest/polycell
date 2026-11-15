@@ -1,0 +1,98 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-039",
+  "summary": "Keep MCP stdio Unicode responses UTF-8 safe",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-039/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "gateway/mcp.py",
+    "tests/test_mcp.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "4dfcec9e25914be12c9d69731d79475d8974fc50",
+    "targetBranch": "main",
+    "outcome": "Keep stdio responses UTF-8 encodable when decoded JSON contains lone surrogates, preserving decoded ids/results and same-process recovery.",
+    "nonGoals": [
+      "No claim about original intermittent timing or raw malformed input-byte recovery",
+      "No gateway fallback/replay, dependency, schema, interface, cell or release changes",
+      "Preserve foreign038 proposal-output work and every existing assertion/watchdog"
+    ],
+    "complexity": "XS",
+    "estimatedMinutes": 10,
+    "budgets": {
+      "maxImplementationFiles": 2,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Use the JSON encoder default ASCII escapes at the outer stdio response boundary. All decoded JSON values remain unchanged, valid Unicode still round trips, and lone surrogates cannot crash strict UTF-8 stdout or leak surrogateescaped invalid bytes. Keep finite-number ingress preflight and the existing HTTP/local dispatch policy.",
+      "components": [
+        {
+          "name": "mcp-stdio",
+          "paths": [
+            "gateway/mcp.py",
+            "tests/test_mcp.py"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Reviewed revert of the outer response encoder change and its regression only."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python -m pytest -q tests/test_mcp.py"
+        ],
+        "evidence": "Real child regressions fail before repair and pass afterward for strict UTF-8 and surrogateescape output, lone/valid Unicode ids, a completed HTTP reply with surrogate plus normal Unicode, exact call count and subsequent requests."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "make check",
+          "python -m pytest tests/ -v"
+        ],
+        "evidence": "Every existing assertion/watchdog and finite JSON guard stays intact; native Goal retains Python, actual TypeScript runtime and Rust gates."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "pinned networkless generated-project SQLite/PGlite matrix",
+          "bash project/governance-check.sh"
+        ],
+        "evidence": "Original accepted TypeScript function is unchanged, no new inference; HTTP/gRPC/stdio, TestQL, persistence, strict JSON and real MCP Unicode controls pass with exact candidate bytes."
+      },
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "goal --delivery-mode pull-request --no-publish -a push --ticket ticket-039 --no-version-sync --no-tag --no-changelog"
+        ],
+        "evidence": "Required exact-head checks, independent protected App review/merge and terminal owner cleanup; no direct merge or source closure commit."
+      }
+    ]
+  }
+}
