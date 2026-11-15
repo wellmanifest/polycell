@@ -80,6 +80,17 @@ class PackageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'I/O'):
             package.replace(self.base, code, self.root / 'impure')
 
+    def test_new_package_schema_rejection_is_value_error_with_cleanup(self):
+        files = {name: (self.base / name).read_bytes() for name in self.manifest['files']}
+        identity = {key: value for key, value in self.manifest.items() if key != 'files'}
+        identity['owner'] = 'unsupported'
+        destination = self.root / 'invalid-package'
+        with self.assertRaisesRegex(ValueError, 'unsupported') as rejected:
+            package.write_package(destination, identity, files)
+        self.assertIsInstance(rejected.exception, package.PackageValidationError)
+        self.assertFalse(destination.exists())
+        self.assertEqual(self.manifest, package.verify(self.base))
+
     def test_oracle_cannot_be_changed_with_candidate(self):
         dest = self.root / 'candidate'
         package.replace(self.base, (self.base / 'cell.py').read_text(), dest)

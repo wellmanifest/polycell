@@ -115,6 +115,95 @@ class FeedbackTests(unittest.TestCase):
             original = self.audit / f'attempt-{number:03}/provider/bundle.json'
             self.assertEqual(answer['bundle'], json.loads(original.read_text()))
 
+    def test_impure_package_contents_are_retained_and_regenerated(self):
+        cases = [('shipping.cost', '\nimport socket\n'),
+                 ('notify.render', '\nimport { readFileSync } from "node:fs";\n'),
+                 ('pricing.quote', '\nuse std::fs;\n')]
+        for number, (selector, addition) in enumerate(cases):
+            with self.subTest(language=selector):
+                self.base = self.root / f'baseline-{number}'
+                self.manifest = package.export(selector, self.base)
+                self.source = (self.base / self.manifest['implementation']).read_text()
+                self.out, self.audit = self.root / f'accepted-{number}', self.root / f'audit-{number}'
+                target = 'generated/' + self.manifest['implementation']
+                bad = self.answer(source=self.source + addition, target=target)
+                good = self.answer(target=target)
+                with self.provider(side_effect=[json.dumps(bad).encode(), json.dumps(good).encode()]) as provider, \
+                     patch.object(forge, 'qualify', side_effect=self.receipt) as qualify:
+                    result = self.run_loop(2)
+                self.assertEqual(2, result['attempts'])
+                self.assertEqual(2, provider.call_count)
+                qualify.assert_called_once()
+                self.assertFalse((self.audit / 'attempt-001/candidate').exists())
+                self.assertEqual(self.source, (self.out / self.manifest['implementation']).read_text())
+                report = json.loads((self.audit / 'report.json').read_text())
+                self.assertEqual('proposal_rejected', report['attempts'][0]['stage'])
+                self.assertIn('known I/O', report['attempts'][0]['error'])
+                self.assertEqual(bad['bundle'], json.loads((self.audit / 'attempt-001/provider/bundle.json').read_text()))
+                prompt = json.loads(provider.call_args_list[1].args[1])['prompt']
+                self.assertIn(report['attempts'][0]['error'], prompt)
+                self.assertIn('ENTIRE file', prompt)
+
+    def test_oversized_generated_file_can_be_regenerated(self):
+        bad = self.answer(source=self.source + '\n#' + 'x' * 2_000_000)
+        with self.provider(side_effect=[json.dumps(bad).encode(), json.dumps(self.answer()).encode()]) as provider, \
+             patch.object(forge, 'qualify', side_effect=self.receipt) as qualify:
+            result = self.run_loop(2)
+        self.assertEqual(2, result['attempts'])
+        self.assertEqual(2, provider.call_count)
+        qualify.assert_called_once()
+        self.assertFalse((self.audit / 'attempt-001/candidate').exists())
+        self.assertEqual(self.source, (self.out / 'cell.py').read_text())
+        report = json.loads((self.audit / 'report.json').read_text())
+        self.assertEqual('proposal_rejected', report['attempts'][0]['stage'])
+        self.assertIn('bounded regular files', report['attempts'][0]['error'])
+
+    def test_rejected_package_contents_exhaust_attempts_without_qualification(self):
+        bad = self.answer(source=self.source + '\nimport socket\n')
+        with self.provider(return_value=json.dumps(bad).encode()) as provider, \
+             patch.object(forge, 'qualify') as qualify:
+            with self.assertRaisesRegex(ValueError, 'after 2 attempts'):
+                self.run_loop(2)
+        self.assertEqual(2, provider.call_count)
+        qualify.assert_not_called()
+        self.assertFalse(self.out.exists())
+        report = json.loads((self.audit / 'report.json').read_text())
+        self.assertFalse(report['ok'])
+        self.assertEqual(['proposal_rejected', 'proposal_rejected'], [a['stage'] for a in report['attempts']])
+        for number in (1, 2):
+            self.assertFalse((self.audit / f'attempt-{number:03}/candidate').exists())
+            self.assertEqual(bad['bundle'], json.loads((self.audit / f'attempt-{number:03}/provider/bundle.json').read_text()))
+
+    def test_package_write_failure_stops_without_retry(self):
+        with self.provider(return_value=json.dumps(self.answer()).encode()) as provider, \
+             patch.object(forge, 'replace', side_effect=PermissionError('injected write failure')), \
+             patch.object(forge, 'qualify') as qualify:
+            with self.assertRaisesRegex(ValueError, 'generation failed'):
+                self.run_loop(2)
+        provider.assert_called_once()
+        qualify.assert_not_called()
+        self.assertFalse(self.out.exists())
+        report = json.loads((self.audit / 'report.json').read_text())
+        self.assertEqual('proposal', report['attempts'][0]['stage'])
+        self.assertIn('injected write failure', report['attempts'][0]['error'])
+
+    def test_package_destination_collision_stops_and_preserves_existing_data(self):
+        occupied = self.audit / 'attempt-001/candidate'
+        def reply(*args, **kwargs):
+            occupied.mkdir()
+            (occupied / 'existing-data').write_text('preserve')
+            return json.dumps(self.answer()).encode()
+        with self.provider(side_effect=reply) as provider, patch.object(forge, 'qualify') as qualify:
+            with self.assertRaisesRegex(ValueError, 'generation failed'):
+                self.run_loop(2)
+        provider.assert_called_once()
+        qualify.assert_not_called()
+        self.assertEqual('preserve', (occupied / 'existing-data').read_text())
+        self.assertFalse(self.out.exists())
+        report = json.loads((self.audit / 'report.json').read_text())
+        self.assertEqual('proposal', report['attempts'][0]['stage'])
+        self.assertIn('destination already exists', report['attempts'][0]['error'])
+
     def test_actual_provider_error_answer_stops_without_retry(self):
         answer = {'error': 'provider unavailable', 'metrics': {'request_id': 'failed-request'}}
         with self.provider(return_value=json.dumps(answer).encode()) as provider, \

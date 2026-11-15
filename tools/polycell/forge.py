@@ -16,7 +16,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from tools.polycell.package import check_oracle, digest, new_directory, qualify, replace, snapshot, verify
+from tools.polycell.package import PackageValidationError, check_oracle, digest, new_directory, qualify, replace, snapshot, verify
 
 HARNESS = "# Polycell adapter envelope; preserve exactly.\n"
 KERNEL = "fn main() {}\n"
@@ -122,7 +122,10 @@ def propose(package: Path, out: Path, audit: Path, model: str, base_url: str,
     except ValueError as error:
         raise ProposalRejected(str(error)) from error
     answer["metrics"]["header_normalized"] = code != raw_code
-    replace(package, code, out, answer["metrics"])
+    try:
+        replace(package, code, out, answer["metrics"])
+    except PackageValidationError as error:
+        raise ProposalRejected(str(error)) from error
     return {"package": str(out), "metrics": answer["metrics"], "qualification": "required"}
 
 
