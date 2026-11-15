@@ -354,6 +354,7 @@ def _qualify_snapshot(candidate: Path, oracle: Path, image: str, timeout: int) -
                "--user", "65534:65534", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
                "--pids-limit", "128", "--cpus", "2", "--memory", "3g", "--tmpfs", "/tmp:rw,exec,size=1536m",
                "-v", f"{ROOT / 'tools'}:/harness/tools:ro", "-v", f"{ROOT / 'standard'}:/harness/standard:ro",
+               "-v", f"{ROOT / 'gateway'}:/harness/gateway:ro",
                "-v", f"{candidate.resolve()}:/candidate:ro",
                "-v", f"{oracle.resolve()}:/oracle:ro", image_id, "python", "/harness/tools/polycell/package_worker.py"]
     # Files bound container logs on disk instead of retaining arbitrary candidate output in RAM.

@@ -7,16 +7,20 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from jsonschema import Draft202012Validator
+from gateway.transport import _validate_response
 from tools.polycell.comparison import outputs_equal
 from tools.polycell.package import assemble, check_oracle
 
 
 def validate_reply(case, reply, meta, output_validator, compare):
     label = str(case.get("name", "case"))[:200]
-    if not isinstance(reply, dict) or not reply.get("ok"):
-        error = reply.get("error", "unspecified host failure") if isinstance(reply, dict) else "invalid host reply"
-        raise ValueError(f"{label}: host error: {str(error)[:1000]}")
-    if reply.get("contract") != meta["contract"]:
+    try:
+        reply = _validate_response(reply, meta["owner"], meta["urn"])
+    except ValueError as error:
+        raise ValueError(f"{label}: {error}") from None
+    if not reply["ok"]:
+        raise ValueError(f"{label}: host error: {reply['error'][:1000]}")
+    if reply["contract"] != meta["contract"]:
         raise ValueError(f"{label}: host contract mismatch")
     errors = output_validator.iter_errors(reply.get("output"))
     error = next(errors, None)
