@@ -52,6 +52,10 @@ def handle(msg, *, local: bool = False) -> dict | None:
     mid, method = msg.get("id"), msg["method"]
     if "id" not in msg:
         return None
+    # JSON integers can use float notation; booleans are not request ids.
+    if not (isinstance(mid, str) or type(mid) is int
+            or (type(mid) is float and mid.is_integer())):
+        return error_response(None, -32600, "Invalid Request")
     params = msg.get("params", {})
     if not isinstance(params, dict):
         return error_response(mid, -32602, "Invalid params")

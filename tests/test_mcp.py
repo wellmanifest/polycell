@@ -211,6 +211,56 @@ class MCPTests(unittest.TestCase):
                     self.assertIn("error", mcp.handle(message))
             call.assert_not_called()
 
+    def test_invalid_request_ids_do_not_dispatch(self):
+        invalid = (True, False, None, [], {}, [1], {"x": 1}, 1.5, -0.5)
+        for kind in ("cell", "process"):
+            for local in (False, True):
+                with patch.dict(mcp.ROUTES, {"example": [(kind, "example")]}, clear=True), \
+                     patch.object(mcp, "via_gateway", return_value={"ok": True}) as remote, \
+                     patch.object(mcp.core, "invoke", return_value={"ok": True}) as cell, \
+                     patch.object(mcp.core, "run_process", return_value={"ok": True}) as process:
+                    for mid in invalid:
+                        with self.subTest(kind=kind, local=local, mid=mid):
+                            message = tool_request()
+                            message["id"] = mid
+                            self.assertEqual({"jsonrpc": "2.0", "id": None,
+                                              "error": {"code": -32600, "message": "Invalid Request"}},
+                                             mcp.handle(message, local=local))
+                    remote.assert_not_called()
+                    cell.assert_not_called()
+                    process.assert_not_called()
+
+    def test_stdio_request_ids_are_checked_before_dispatch_and_server_recovers(self):
+        invalid = (True, False, None, [], {}, [1], {"x": 1}, 1.5, -0.5)
+        valid = (0, -7, 2**64, "", "Zażółć 🌍", 1.0, 2.0)
+        messages = []
+        for ids, key in ((invalid, "rejected"), (valid, "accepted")):
+            for index, mid in enumerate(ids):
+                messages.append({"jsonrpc": "2.0", "id": mid, "method": "tools/call",
+                                 "params": {"name": "shipping_cost", "arguments": {key: index}}})
+        messages.extend([{"jsonrpc": "2.0", "method": "tools/call",
+                          "params": {"name": "shipping_cost", "arguments": {"notification": True}}},
+                         {"jsonrpc": "2.0", "id": "after-id-checks", "method": "tools/list"}])
+        wire = "".join(json.dumps(message) + "\n" for message in messages)
+        wire = wire.replace('"id": 1.0,', '"id": 1e0,')
+        with gateway_reply(b'{"ok":true}') as (base, calls):
+            result = subprocess.run([sys.executable, "-m", "gateway.mcp"],
+                                    input=wire.encode("utf-8"), capture_output=True, timeout=10, check=True,
+                                    env={**os.environ, "WM_GATEWAY_URL": base, "PYTHONIOENCODING": "utf-8:strict"})
+            responses = [json.loads(line) for line in result.stdout.decode("utf-8").splitlines()]
+            self.assertEqual(len(invalid) + len(valid) + 1, len(responses))
+            for response in responses[:len(invalid)]:
+                self.assertEqual({"jsonrpc": "2.0", "id": None,
+                                  "error": {"code": -32600, "message": "Invalid Request"}}, response)
+            accepted = responses[len(invalid):-1]
+            self.assertEqual(list(valid), [response["id"] for response in accepted])
+            for response in accepted:
+                self.assertFalse(response["result"]["isError"])
+            self.assertEqual("after-id-checks", responses[-1]["id"])
+            self.assertIn("tools", responses[-1]["result"])
+            self.assertEqual([("/api/cells/shipping.cost", {"accepted": i})
+                              for i in range(len(valid))], calls)
+
     def test_stdio_rejects_nonfinite_numbers_before_dispatch_and_recovers(self):
         literals = ("NaN", "Infinity", "-Infinity", "1e400", "-1e400")
         messages = []
