@@ -268,19 +268,59 @@ def git_snapshot(directory: Path, bundle: Path | None = None) -> str:
     return git("rev-parse", "HEAD")
 
 
+def _package_commit(source: Path, frozen: Path, manifest: dict) -> str | None:
+    """Bind a commit to raw snapshot bytes, independently of index status flags."""
+    if not os.path.lexists(source / ".git"):
+        return None
+    def git(*args):
+        return subprocess.check_output(["git", "--no-optional-locks", "-C", str(source), *args],
+                                       stderr=subprocess.STDOUT)
+    try:
+        if git("status", "--porcelain"):
+            raise ValueError("Git package must be committed before assembly")
+        commit = git("rev-parse", "--verify", "HEAD").decode().strip()
+        entries = {}
+        for entry in git("ls-tree", "-z", "--full-tree", commit).split(b"\0"):
+            if entry:
+                metadata, name = entry.split(b"\t", 1)
+                entries[name.decode()] = metadata.split()
+        names = sorted(["package.json", *manifest["files"]])
+        if set(entries) != set(names) or any(mode not in (b"100644", b"100755") or kind != b"blob"
+                                            for mode, kind, object_id in entries.values()):
+            raise ValueError("Git package layout must match the committed package")
+        # Let Git select its object format (SHA-1 or SHA-256), but bypass clean
+        # filters and newline normalization: the manifest describes raw bytes.
+        objects = git("hash-object", "--no-filters", "--", *(str(frozen / name) for name in names)).splitlines()
+        if dict(zip(names, objects)) != {name: fields[2] for name, fields in entries.items()}:
+            raise ValueError("Git package contents must match the committed package")
+    except (subprocess.CalledProcessError, UnicodeError) as error:
+        raise ValueError("cannot verify Git package commit before assembly") from error
+    return commit
+
+
 def assemble(packages: list[Path], out: Path, runtime: Path = ROOT, warm: bool = False,
              record_git: bool = True, generate: bool = False) -> dict:
     if not packages:
         raise ValueError("assembly requires at least one package")
-    with new_directory(out) as staged:
-        lock = _assemble_into(packages, staged, runtime, warm, record_git)
-        if generate:
-            subprocess.run([sys.executable, str(staged / "tools/polycell/gen.py")], check=True)
-            subprocess.run([sys.executable, str(staged / "standard/conformance.py"), "--root", str(staged)], check=True)
+    packages = list(map(Path, packages))
+    if any(Path(out).resolve().is_relative_to(source.resolve()) for source in packages):
+        raise ValueError("assembly output must be outside source packages")
+    with tempfile.TemporaryDirectory(prefix="polycell-assembly-") as temp:
+        frozen, commits = [], []
+        for index, source in enumerate(packages):
+            copy = Path(temp) / str(index)
+            manifest = snapshot(source, copy)
+            frozen.append(copy)
+            commits.append(_package_commit(source, copy, manifest) if record_git else None)
+        with new_directory(out) as staged:
+            lock = _assemble_into(frozen, staged, runtime, warm, commits)
+            if generate:
+                subprocess.run([sys.executable, str(staged / "tools/polycell/gen.py")], check=True)
+                subprocess.run([sys.executable, str(staged / "standard/conformance.py"), "--root", str(staged)], check=True)
     return lock
 
 
-def _assemble_into(packages: list[Path], out: Path, runtime: Path, warm: bool, record_git: bool) -> dict:
+def _assemble_into(packages: list[Path], out: Path, runtime: Path, warm: bool, commits: list[str | None]) -> dict:
     manifests = [verify(p) for p in packages]
     validate_contract_set([yaml.safe_load((p / "contract.cell.yaml").read_text()) for p in packages])
     if out.exists():
@@ -314,7 +354,7 @@ def _assemble_into(packages: list[Path], out: Path, runtime: Path, warm: bool, r
         if path.exists():
             shutil.copyfile(path, out / "tests" / name)
     lock = {"schema": "wellmanifest.polycell.cellset/v1", "packages": [], "processes": []}
-    for package, manifest in zip(packages, manifests):
+    for package, manifest, commit in zip(packages, manifests, commits):
         name, owner = runtime_name(manifest['name'], manifest['urn']), manifest["owner"]
         shutil.copyfile(package / "contract.cell.yaml", out / f"contracts/cells/{name}.cell.yaml")
         shutil.copyfile(package / manifest["implementation"], out / f"cells/{owner}/{name.replace('.', '_')}.{EXT[owner]}")
@@ -323,11 +363,6 @@ def _assemble_into(packages: list[Path], out: Path, runtime: Path, warm: bool, r
         examples = {manifest['name'] + ":" + c["name"] for c in contract.get("examples", [])}
         (out / f"tests/golden/{name}.jsonl").write_text("".join(json.dumps({k: c[k] for k in ("input", "output")}) + "\n"
                                                                     for c in cases if c.get("name") not in examples))
-        commit = None
-        if record_git and (package / ".git").exists():
-            if subprocess.check_output(["git", "-C", str(package), "status", "--porcelain"]):
-                raise ValueError("Git package must be committed before assembly")
-            commit = subprocess.check_output(["git", "-C", str(package), "rev-parse", "HEAD"], text=True).strip()
         lock["packages"].append({"urn": manifest["urn"], "manifest_sha256": digest((package / "package.json").read_bytes()), "git_commit": commit})
     urns = {m["urn"] for m in manifests}
     for path in (runtime / "contracts/processes").glob("*.process.yaml"):
