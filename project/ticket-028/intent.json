@@ -1,0 +1,98 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-028",
+  "summary": "Clean up stdio descendants after launcher exit",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-028/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "gateway/transport.py",
+    "tests/test_transport.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "149987c4f47ba50d4b065f150d0e80dccf00d974",
+    "targetBranch": "main",
+    "outcome": "Terminate the owned POSIX stdio process group and release its worker/pipes after timeout even when the launcher already exited.",
+    "nonGoals": [
+      "Do not claim the earlier intermittent test cause is proven",
+      "No deadline/assertion weakening, dependencies, cell logic, protocol or release changes",
+      "Preserve peer027 path quoting and every foreign checkout/lease"
+    ],
+    "complexity": "XS",
+    "estimatedMinutes": 10,
+    "budgets": {
+      "maxImplementationFiles": 2,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Keep the owned POSIX process group cleanup independent of launcher liveness; retain the existing non-POSIX fallback, bounded wait/join and cache retirement. Add one actual-process regression with an exited launcher and live pipe-holding descendant.",
+      "components": [
+        {
+          "name": "stdio-transport",
+          "paths": [
+            "gateway/transport.py",
+            "tests/test_transport.py"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Reviewed revert of the cleanup condition and its regression; retain the independently merged path quoting."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python -m unittest discover -s tests -p test_transport.py -v"
+        ],
+        "evidence": "Actual public-API exited-launcher regression fails before the repair and verifies worker/streams/cache cleanup after it; no request replay."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "make check",
+          "python -m unittest discover -s tests -p test_*.py -v"
+        ],
+        "evidence": "All existing assertions, host lifecycle controls and the peer027 path regressions remain valid."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "isolated portable-project runtime qualification",
+          "bash project/governance-check.sh"
+        ],
+        "evidence": "Pinned networkless runtime verifies HTTP/gRPC/stdio, persistence and MCP with the original generated function unchanged."
+      },
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "goal --delivery-mode pull-request --no-publish -a push --ticket ticket-028 --no-version-sync --no-tag --no-changelog"
+        ],
+        "evidence": "Author delivery, exact-head required checks, independent review and protected merge; no manual merge or release."
+      }
+    ]
+  }
+}

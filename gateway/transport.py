@@ -105,7 +105,8 @@ class _Stdio:
         with self._close_lock:
             if not self.closed.is_set():
                 self.closed.set()
-                if self.p.poll() is None:
+                # Descendants can retain the pipes after their launcher exits.
+                if os.name == "posix" or self.p.poll() is None:
                     try:
                         if os.name == "posix":
                             os.killpg(self.p.pid, signal.SIGKILL)

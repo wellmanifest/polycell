@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 import shlex
+import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -461,6 +463,68 @@ class StdioDeadlineTests(unittest.TestCase):
         self.assertIs(observed['result']['ok'], True)
         with self.assertRaises(ProcessLookupError):
             os.kill(observed['pid'], 0)
+
+
+class StdioProcessGroupTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'posix', 'stdio process groups require POSIX')
+    def test_timeout_cleans_descendants_after_exited_launcher(self):
+        clients = []
+        original_spawn = transport._Stdio
+        control = self.enterContext(socket.socket())
+        control.bind(('127.0.0.1', 0))
+        control.listen(1)
+        control.settimeout(3)
+        descendant = (
+            'import socket,sys,time;from pathlib import Path;'
+            f'connection=socket.create_connection(("127.0.0.1",{control.getsockname()[1]}),timeout=3);'
+            'Path(sys.argv[1]).touch();time.sleep(60)')
+        with tempfile.TemporaryDirectory() as directory:
+            launcher = Path(directory) / 'launcher.py'
+            ready = Path(directory) / 'descendant.ready'
+            launcher.write_text(
+                'import os,subprocess,sys,time\nfrom pathlib import Path\n'
+                'ready=Path(sys.argv[1])\n'
+                f'child={descendant!r}\n'
+                'subprocess.Popen([sys.executable,"-c",child,str(ready)])\n'
+                'while not ready.exists():\n time.sleep(0.005)\n'
+                'os._exit(0)\n')
+
+            def spawn(command):
+                client = original_spawn(command)
+                clients.append(client)
+                # Make launcher exit deterministic while its descendant owns the pipes.
+                self.assertEqual(0, client.p.wait(timeout=3))
+                return client
+
+            command = shlex.join([sys.executable, str(launcher), str(ready)])
+            with patch.dict(os.environ, {'HOST_PYTHON_STDIO': command}), \
+                 patch.dict(transport._stdio, {}, clear=True), \
+                 patch.object(transport, '_Stdio', side_effect=spawn), \
+                 patch.object(transport, 'STDIO_TIMEOUT', 0.15):
+                try:
+                    result = transport.call('python', 'stdio', 'urn:wm:probe', {})
+                    self.assertIs(result['ok'], False)
+                    self.assertIn('timed out', result['error'])
+                    self.assertTrue(ready.exists())
+                    self.assertEqual(1, len(clients), 'failed requests must not spawn a retry')
+                    self.assertEqual({}, transport._stdio)
+                    client = clients[0]
+                    self.assertTrue(client.closed.is_set())
+                    self.assertFalse(client.worker.is_alive(), 'descendant still holds stdio open')
+                    self.assertTrue(client.p.stdin.closed and client.p.stdout.closed)
+                    connection, _ = control.accept()
+                    with connection:
+                        connection.settimeout(3)
+                        self.assertEqual(b'', connection.recv(1), 'descendant survived cleanup')
+                finally:
+                    # Bound the old implementation too when this regression fails.
+                    for client in clients:
+                        try:
+                            os.killpg(client.p.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        client.worker.join(timeout=3)
+                        client.close()
 
 
 if __name__ == '__main__':
