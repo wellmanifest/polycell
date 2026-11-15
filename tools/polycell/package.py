@@ -326,8 +326,14 @@ def _assemble_into(packages: list[Path], out: Path, runtime: Path, warm: bool, c
     if out.exists():
         raise ValueError("assembly destination must be new")
     out.mkdir(parents=True)
+    destination = out.resolve()
     ignore = shutil.ignore_patterns("__pycache__", "*.pyc", "node_modules", "target")
+    def runtime_copy_guard(directory, names):
+        if destination.is_relative_to(Path(directory).resolve()):
+            raise ValueError("assembly output must be outside copied runtime directories")
+        return ()
     def runtime_ignore(directory, names):
+        runtime_copy_guard(directory, names)
         omitted = set(ignore(directory, names))
         if Path(directory) == runtime / "twin":
             omitted.add("scenarios")  # Demo-specific checkout; app scenarios are generated from its cells.
@@ -374,9 +380,9 @@ def _assemble_into(packages: list[Path], out: Path, runtime: Path, warm: bool, c
     if warm:
         for path in ("hosts/ts/node_modules", "hosts/rust/target"):
             if (runtime / path).exists():
-                shutil.copytree(runtime / path, out / path)
+                shutil.copytree(runtime / path, out / path, ignore=runtime_copy_guard)
         if (runtime / "gen/python/polycell").exists():
-            shutil.copytree(runtime / "gen/python/polycell", out / "gen/python/polycell")
+            shutil.copytree(runtime / "gen/python/polycell", out / "gen/python/polycell", ignore=runtime_copy_guard)
     return lock
 
 
