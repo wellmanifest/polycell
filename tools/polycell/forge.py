@@ -13,6 +13,7 @@ import re
 import sqlite3
 import hashlib
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -209,29 +210,41 @@ def regenerate(package: Path, out: Path, audit: Path, model: str, base_url: str,
 
 def replay(package: Path, out: Path, audit: Path) -> dict:
     """Explicitly re-evaluate one archived native response; never count a new call."""
+    package, out, audit = (p.absolute() for p in (package, out, audit))
+    if os.path.lexists(out):
+        raise ValueError("replay destination must be new")
+    destination = out.resolve()
+    for source in (package.resolve(), audit.resolve()):
+        if destination.is_relative_to(source) or source.is_relative_to(destination):
+            raise ValueError("replay output must be outside the source package and audit")
     from forge_base.providers import validate_bundle
     from subllm.interaction_store import InteractionStore
-    manifest = verify(package)
     audit = audit.resolve()
-    metrics = json.loads((audit / "metrics.json").read_text())
-    request_id = metrics["request_id"]
-    with sqlite3.connect((audit / "usage.sqlite3").as_uri() + "?mode=ro", uri=True) as db:
-        db.row_factory = sqlite3.Row
-        rows = db.execute("select * from attempts where request_id = ? and status = 'success'",
-                          (hashlib.sha256(request_id.encode()).hexdigest()[:24],)).fetchall()
-    if len(rows) != 1 or not rows[0]["archive_id"]:
-        raise ValueError("replay requires exactly one archived successful native attempt")
-    row = rows[0]
-    saved = InteractionStore(audit / "archive").get_interaction(row["archive_id"], row["archive_day"])
-    original = json.loads(saved["request"]["messages"][1]["content"])
-    if saved["correlation_id"] != request_id or (package / "prompt.md").read_text() not in original["objective"]:
-        raise ValueError("archive does not bind this package context")
-    if original["baseline"] != {"harness.py": HARNESS, "kernel.rs": KERNEL}:
-        raise ValueError("archive has a different Forge baseline")
-    code = extract(validate_bundle(json.loads(saved["response"]["content"])), manifest)
-    stamped = stamp_header(code, manifest)
-    metrics = {**metrics, "header_normalized": stamped != code, "replay": True, "new_inference_calls": 0}
-    replace(package, stamped, out, metrics)
+    with tempfile.TemporaryDirectory(prefix="polycell-replay-") as temp:
+        frozen = Path(temp) / "baseline"
+        manifest = snapshot(package, frozen)
+        metrics = json.loads((audit / "metrics.json").read_text())
+        request_id = metrics["request_id"]
+        with sqlite3.connect((audit / "usage.sqlite3").as_uri() + "?mode=ro", uri=True) as db:
+            db.row_factory = sqlite3.Row
+            rows = db.execute("select * from attempts where request_id = ? and status = 'success'",
+                              (hashlib.sha256(request_id.encode()).hexdigest()[:24],)).fetchall()
+        if len(rows) != 1 or not rows[0]["archive_id"]:
+            raise ValueError("replay requires exactly one archived successful native attempt")
+        row = rows[0]
+        saved = InteractionStore(audit / "archive").get_interaction(row["archive_id"], row["archive_day"])
+        original = json.loads(saved["request"]["messages"][1]["content"])
+        context = request(frozen, "")["prompt"]
+        if (saved["correlation_id"] != request_id or not isinstance(original, dict)
+                or not isinstance(original.get("objective"), str) or not original["objective"].startswith(context)):
+            raise ValueError("archive does not bind this package context")
+        if original.get("baseline") != {"harness.py": HARNESS, "kernel.rs": KERNEL}:
+            raise ValueError("archive has a different Forge baseline")
+        code = extract(validate_bundle(json.loads(saved["response"]["content"])), manifest)
+        stamped = stamp_header(code, manifest)
+        metrics = {**metrics, "header_normalized": stamped != code, "replay": True, "new_inference_calls": 0}
+        with new_directory(out) as staged:
+            replace(frozen, stamped, staged, metrics)
     return {"package": str(out), "metrics": metrics, "qualification": "required"}
 
 
