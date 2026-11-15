@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT))
 from standard.conformance import HEADER, interface_hash
 from tools.polycell.purity import has_forbidden_io
 from tools.polycell.model import TypeRef, URN_RE, runtime_name, validate_contract_set
+from tools.polycell.guards import _finite_float, _invalid_number, _unique_object
 
 EXT = {"python": "py", "ts": "ts", "rust": "rs"}
 ARTIFACTS = {"contract.cell.yaml", "cases.json", "types.txt", "prompt.md", "input.schema.json", "output.schema.json"}
@@ -354,6 +355,32 @@ def qualify(candidate: Path, oracle: Path, image: str, timeout: int = 180) -> di
         return _qualify_snapshot(candidate_copy, oracle_copy, image, timeout)
 
 
+def _qualification_receipt(raw: bytes, manifest: dict, expected_cases: int) -> dict:
+    """Check the worker's existing receipt before adding trusted local bindings."""
+    try:
+        receipt = json.loads(raw.splitlines()[-1].decode('utf-8'), parse_constant=_invalid_number,
+                             parse_float=_finite_float, object_pairs_hook=_unique_object)
+        json_bytes(receipt)  # Also reject invalid Unicode in optional metadata.
+    except (IndexError, ValueError, RecursionError) as error:
+        raise ValueError(f"invalid qualification receipt: invalid JSON: {error}") from None
+    if not isinstance(receipt, dict):
+        raise ValueError("invalid qualification receipt: expected an object")
+    if receipt.get("ok") is not True:
+        raise ValueError("invalid qualification receipt: ok must be true")
+    expected = {"schema": "wellmanifest.polycell.qualification/v1", "urn": manifest["urn"],
+                "owner": manifest["owner"], "transport": "stdio", "network": "none"}
+    for key, value in expected.items():
+        if receipt.get(key) != value:
+            raise ValueError(f"invalid qualification receipt: {key} must match {value}")
+    if type(receipt.get("cases")) is not int or receipt["cases"] != expected_cases or expected_cases < 1:
+        raise ValueError(f"invalid qualification receipt: cases must equal {expected_cases}")
+    for key in ("build_s", "elapsed_s"):
+        value = receipt.get(key)
+        if type(value) not in (int, float) or value < 0:
+            raise ValueError(f"invalid qualification receipt: {key} must be finite and nonnegative")
+    return receipt
+
+
 def _qualify_snapshot(candidate: Path, oracle: Path, image: str, timeout: int) -> dict:
     manifest = check_oracle(candidate, oracle)
     image_id = subprocess.check_output(["docker", "image", "inspect", "--format", "{{.Id}}", image], text=True).strip()
@@ -377,12 +404,12 @@ def _qualify_snapshot(candidate: Path, oracle: Path, image: str, timeout: int) -
         log.seek(0, 2)
         size = log.tell()
         log.seek(max(0, size - 100_000))
-        lines = log.read().decode(errors="replace").splitlines()
+        raw = log.read()
     if result.returncode:
+        lines = raw.decode(errors="replace").splitlines()
         raise ValueError("qualification failed: " + "\n".join(lines[-20:]))
-    receipt = json.loads(lines[-1])
-    if not receipt.get("ok") or receipt.get("urn") != manifest["urn"]:
-        raise ValueError("invalid qualification receipt")
+    expected_cases = len(json.loads((oracle / "cases.json").read_text()))
+    receipt = _qualification_receipt(raw, manifest, expected_cases)
     receipt["candidate_sha256"] = digest((candidate / "package.json").read_bytes())
     receipt["oracle_sha256"] = digest((oracle / "package.json").read_bytes())
     receipt["image"] = image_id
