@@ -42,6 +42,9 @@ over HTTP/gRPC/stdio, logs and MCP. The gateway remains running. No assertions,
 timeouts, adapters or schemas changed. Hash-verified Forge/SubLLM wheel metadata
 has no incompatible Psycopg constraint; the optional SubLLM range is >=3.2,<4.
 
+The pin carries its validated compatibility rationale. Hosted governance counts
+the changed dependency in its budget, so this single-file repair uses class S
+(one dependency); the implementation scope and policy limits remain unchanged.
 Required CI, independent review and terminal cleanup are recorded externally
 after the source/carrier freeze; AC-03 remains pending in this author snapshot.
 

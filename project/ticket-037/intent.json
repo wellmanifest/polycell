@@ -26,7 +26,7 @@
     "targetBranch": "main",
     "outcome": "Keep the PGlite-backed gateway alive when timestamp results are read by the pinned binary Psycopg driver.",
     "nonGoals": ["No application, DB adapter, protocol or schema changes", "No claim that the full upstream native root cause is proven", "Preserve the separately owned runtime-copy ticket-036"],
-    "complexity": "XS",
+    "complexity": "S",
     "estimatedMinutes": 20,
     "budgets": {"maxImplementationFiles": 1, "maxAffectedComponents": 1, "maxPublicInterfaceChanges": 0, "maxRuntimeDependencies": 1},
     "architecture": {
