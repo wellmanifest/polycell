@@ -1,0 +1,98 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-041",
+  "summary": "Reject invalid MCP request ids before tool dispatch",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-041/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "gateway/mcp.py",
+    "tests/test_mcp.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "5eab5139d6b72f321562767ff2548040ab16d77b",
+    "targetBranch": "main",
+    "outcome": "Reject invalid MCP request ids before any gateway, local cell or process dispatch; retain valid ids, notifications and subsequent requests.",
+    "nonGoals": [
+      "No duplicate-id session tracking or interpretation of raw malformed input bytes",
+      "No source timing claim, dependency, schema, public interface, cell, budget or release changes",
+      "Preserve every existing assertion, timeout, finite-number and UTF-8 guard and no-replay behavior"
+    ],
+    "complexity": "XS",
+    "estimatedMinutes": 10,
+    "budgets": {
+      "maxImplementationFiles": 2,
+      "maxAffectedComponents": 1,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Validate id immediately after recognizing an id-bearing request and before params/route dispatch. Allow strings and mathematically integer JSON numbers (including integral floats); reject bool/null/containers/fractions with Invalid Request and null correlation. Keep missing-id notifications silent.",
+      "components": [
+        {
+          "name": "mcp-stdio",
+          "paths": [
+            "gateway/mcp.py",
+            "tests/test_mcp.py"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Reviewed revert of only this id validation guard and its regressions."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "python -m pytest -q tests/test_mcp.py"
+        ],
+        "evidence": "Direct gateway/local cell/process and real child regressions reject nine invalid id shapes before dispatch, preserve exact positive calls, missing-id notification silence, valid Unicode/integer ids and same-process continuation."
+      },
+      {
+        "criterion": "AC-02",
+        "commands": [
+          "make check",
+          "python -m pytest tests/ -v"
+        ],
+        "evidence": "Existing assertions and watchdogs unchanged; native Goal retains Python, actual TypeScript runtime and Rust gates."
+      },
+      {
+        "criterion": "AC-03",
+        "commands": [
+          "pinned SQLite/PGlite generated-project matrix",
+          "bash project/governance-check.sh"
+        ],
+        "evidence": "Original accepted TypeScript function/package unchanged, zero new cell inference, all transport/TestQL/persistence/strict JSON/Unicode and request-id controls pass."
+      },
+      {
+        "criterion": "AC-04",
+        "commands": [
+          "native Goal author PR and protected exact-head publication"
+        ],
+        "evidence": "Required exact-head CI, independent protected review/merge and native owner release/cleanup; no direct merge or closure commit."
+      }
+    ]
+  }
+}
