@@ -3,7 +3,7 @@
 - **ID**: ticket-036
 - **Owner**: unresolved:human
 - **Status**: IN_PROGRESS
-- **Workflow state**: VALIDATION
+- **Workflow state**: PUBLICATION
 - **Created**: 2026-11-15
 
 ## Goal and scope
@@ -24,9 +24,9 @@ No cell, host, transport, dependency or governance changes.
 
 - [x] AC-01: Overlapping runtime/output paths, aliases and warm copies fail with a bounded ValueError before recursive staging traversal; sources and existing destinations remain intact.
 - [x] AC-02: Normal .run/external assembly, unrelated aliases and complete warm dependencies retain existing behavior, including package Git/manifest bindings.
-- [ ] AC-03: Regression, real Python/TS/Rust qualification and Git bundles, parity, TestQL, DB/MCP and governance pass before protected independent publication.
+- [x] AC-03: Regression, real Python/TS/Rust qualification and Git bundles, parity, TestQL, DB/MCP and governance pass before protected independent publication.
 
-## Validation in progress
+## Validation before publication
 
 Eight initial test methods expose twelve bounded self-copy failures on old
 source. All 47 focused package tests now pass, including path aliases, warm
@@ -34,10 +34,16 @@ protobuf copying, nested warm dependencies, .run output and existing Git gates.
 The published MCP integration passes all 230 regression tests and governance.
 Real Docker qualification and Git bundle round trips pass for Python, TypeScript
 and Rust, with no new generator calls. All 45 parity calls pass. Live PGlite
-scenarios exposed a native timestamp-loader crash in the existing Psycopg pin;
-separately scoped ticket-037 supplies the prerequisite dependency repair.
-Continue application scenarios on that independently published dependency before
-protected publication of this guard.
+scenarios exposed a native timestamp-loader crash in the existing Psycopg pin.
+Separately scoped ticket-037 published the prerequisite repair in PR #36.
+After integrating that accepted repair, a private environment with matching
+Psycopg/binary 3.3.9 passes all 230 tests and conformance. Live PGlite passes
+45 parity calls, TestQL 5/5, persisted checkout, logs and MCP. Fresh assembly
+preserves all three qualified package commits and propagates the new dependency
+pin. The package implementation hash matches the real qualification evidence.
+
+Required CI, independent exact-head review, protected merge and owner cleanup
+are recorded externally after this source/carrier freeze.
 
 ## Tracking boundary
 
