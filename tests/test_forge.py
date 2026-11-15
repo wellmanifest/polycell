@@ -163,11 +163,13 @@ class FeedbackTests(unittest.TestCase):
 class QualificationDiagnosticTests(unittest.TestCase):
     def setUp(self):
         self.case = {'name': 'boundary', 'output': {'result': 19.99}}
-        self.meta = {'contract': 'expected'}
+        self.meta = {'contract': 'expected', 'urn': 'urn:wm:cell:test:example:v1', 'owner': 'python'}
         self.validator = Draft202012Validator({'type': 'object', 'required': ['result'],
                                                'properties': {'result': {'type': 'number'}}})
 
     def validate(self, reply):
+        reply = {'urn': self.meta['urn'], 'lang': self.meta['owner'], 'ok': True, 'error': '',
+                 'duration_ms': 0, 'contract': self.meta['contract'], 'output': self.case['output'], **reply}
         validate_reply(self.case, reply, self.meta, self.validator, lambda a, b: a == b)
 
     def test_host_failure_is_not_hidden_by_output_schema(self):

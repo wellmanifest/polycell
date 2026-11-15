@@ -82,11 +82,13 @@ class OutputComparisonTests(unittest.TestCase):
                                  (2**53 + 1, float(2**53))):
             with self.subTest(expected=expected), self.assertRaisesRegex(ValueError, 'behavior mismatch'):
                 validate_reply({'name': 'json-value', 'output': {'data': expected}},
-                               {'ok': True, 'contract': 'hash', 'output': {'data': actual}},
-                               {'contract': 'hash'}, validator, core._eq)
+                               {'urn': 'urn:wm:cell:test:example:v1', 'lang': 'python', 'ok': True,
+                                'error': '', 'duration_ms': 0, 'contract': 'hash', 'output': {'data': actual}},
+                               {'urn': 'urn:wm:cell:test:example:v1', 'owner': 'python', 'contract': 'hash'}, validator, core._eq)
 
     def test_qualification_accepts_small_numeric_error(self):
         validator = Draft202012Validator({'type': 'object', 'properties': {'data': {}}})
         validate_reply({'name': 'numeric', 'output': {'data': 1.5}},
-                       {'ok': True, 'contract': 'hash', 'output': {'data': 1.5 + 5e-10}},
-                       {'contract': 'hash'}, validator, core._eq)
+                       {'urn': 'urn:wm:cell:test:example:v1', 'lang': 'python', 'ok': True,
+                        'error': '', 'duration_ms': 0, 'contract': 'hash', 'output': {'data': 1.5 + 5e-10}},
+                       {'urn': 'urn:wm:cell:test:example:v1', 'owner': 'python', 'contract': 'hash'}, validator, core._eq)
