@@ -1,0 +1,49 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-037",
+  "summary": "Upgrade Psycopg to avoid PGlite timestamp loader crashes",
+  "workstream": "integration",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-037/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "requirements.txt"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "50a732ae8c35bc9cdcd0a9cdbe4cd18c26b24c48",
+    "targetBranch": "main",
+    "outcome": "Keep the PGlite-backed gateway alive when timestamp results are read by the pinned binary Psycopg driver.",
+    "nonGoals": ["No application, DB adapter, protocol or schema changes", "No claim that the full upstream native root cause is proven", "Preserve the separately owned runtime-copy ticket-036"],
+    "complexity": "S",
+    "estimatedMinutes": 20,
+    "budgets": {"maxImplementationFiles": 1, "maxAffectedComponents": 1, "maxPublicInterfaceChanges": 0, "maxRuntimeDependencies": 1},
+    "architecture": {
+      "status": "accepted",
+      "decision": "Upgrade the existing Psycopg/binary pin from 3.3.6 to 3.3.9. A controlled image comparison reproduces SIGSEGV for timestamp results with 3.3.6 and succeeds with 3.3.9 against the same PGlite server, SQL, threading and gRPC probe; integer-only results are a positive control.",
+      "components": [{"name": "python-runtime", "paths": ["requirements.txt"]}],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {"impact": "none", "states": [], "evidence": []},
+      "rollback": "Restore the previous dependency pin through an independently reviewed change; retain the failing native reproduction."
+    },
+    "runtimeDependencies": ["psycopg[binary]==3.3.9 (patch update of an existing dependency)"],
+    "validation": [
+      {"criterion": "AC-01", "commands": ["bounded old/new binary driver reproduction"], "evidence": "Old timestamp query exits 139; integer-only control and new timestamp query exit 0 on the same PGlite data and runtime base."},
+      {"criterion": "AC-02", "commands": ["make check test", "make parity", "make testql integration", "project/governance-check.sh"], "evidence": "Installed versions match the candidate pin; live PGlite gateway, all transports, persistence, logs and MCP pass without adapter changes or weakened checks."},
+      {"criterion": "AC-03", "commands": ["protected exact-head Validator review and merge"], "evidence": "Required CI and trusted App approval bind the final head; main CI and owner cleanup are recorded externally."}
+    ]
+  }
+}
