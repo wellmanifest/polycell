@@ -102,7 +102,8 @@ def main():
         else:
             out = handle(message, local=args.local)
         if out is not None:
-            sys.stdout.write(json.dumps(out, ensure_ascii=False) + "\n")
+            # Escape code points that cannot be written directly as UTF-8.
+            sys.stdout.write(json.dumps(out) + "\n")
             sys.stdout.flush()
 
 

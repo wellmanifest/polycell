@@ -168,6 +168,38 @@ class MCPTests(unittest.TestCase):
         self.assertEqual(7, lines[1]["id"])
         self.assertIn("tools", lines[1]["result"])
 
+    def test_stdio_unicode_ids_keep_utf8_wire_and_server_alive(self):
+        cases = (("strict", ["\ud800", "\udfff", "Zażółć 🌍", 31]),
+                 ("surrogateescape", ["\udcff", "Zażółć 🌍", 32]))
+        for errors, ids in cases:
+            with self.subTest(stdout_errors=errors):
+                messages = [{"jsonrpc": "2.0", "id": mid, "method": "tools/list"} for mid in ids]
+                wire = "".join(json.dumps(msg) + "\n" for msg in messages).encode("utf-8")
+                result = subprocess.run([sys.executable, "-m", "gateway.mcp"],
+                                        input=wire, capture_output=True, timeout=10, check=True,
+                                        env={**os.environ, "PYTHONIOENCODING": "utf-8:" + errors})
+                responses = [json.loads(line) for line in result.stdout.decode("utf-8").splitlines()]
+                self.assertEqual(ids, [reply["id"] for reply in responses])
+                for reply in responses:
+                    self.assertIn("tools", reply["result"])
+
+    def test_stdio_unicode_gateway_reply_is_not_replayed_and_server_recovers(self):
+        payload = {"ok": True, "output": {"text": "\ud800", "unicode": "Zażółć 🌍"}}
+        with gateway_reply(json.dumps(payload).encode("utf-8")) as (base, calls):
+            request = tool_request()
+            request["params"]["name"] = "shipping_cost"
+            messages = [request, {"jsonrpc": "2.0", "id": 12, "method": "tools/list"}]
+            result = subprocess.run([sys.executable, "-m", "gateway.mcp"],
+                                    input="".join(json.dumps(msg) + "\n" for msg in messages).encode("utf-8"),
+                                    capture_output=True, timeout=10, check=True,
+                                    env={**os.environ, "WM_GATEWAY_URL": base, "PYTHONIOENCODING": "utf-8:strict"})
+            responses = [json.loads(line) for line in result.stdout.decode("utf-8").splitlines()]
+            self.assertEqual([9, 12], [reply["id"] for reply in responses])
+            self.assertFalse(responses[0]["result"]["isError"])
+            self.assertEqual(payload, json.loads(responses[0]["result"]["content"][0]["text"]))
+            self.assertIn("tools", responses[1]["result"])
+            self.assertEqual([("/api/cells/shipping.cost", {"value": 7})], calls)
+
     def test_invalid_requests_do_not_dispatch(self):
         messages = [[], None, {"method": "tools/list", "id": 1},
                     {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": []},
