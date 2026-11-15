@@ -23,11 +23,11 @@ sys.path.insert(0, str(ROOT / "gen" / "python"))
 
 DEFAULTS = {
     "python": {"http": "http://127.0.0.1:8101", "grpc": "127.0.0.1:9101",
-               "stdio": f"{sys.executable} {ROOT}/hosts/python/host.py --stdio"},
+               "stdio": shlex.join([sys.executable, str(ROOT / "hosts/python/host.py"), "--stdio"])},
     "ts": {"http": "http://127.0.0.1:8102", "grpc": "127.0.0.1:9102",
-           "stdio": f"node --experimental-strip-types --no-warnings {ROOT}/hosts/ts/host.ts --stdio"},
+           "stdio": shlex.join(["node", "--experimental-strip-types", "--no-warnings", str(ROOT / "hosts/ts/host.ts"), "--stdio"])},
     "rust": {"http": "http://127.0.0.1:8103", "grpc": "127.0.0.1:9103",
-             "stdio": f"{ROOT}/hosts/rust/target/release/host --stdio"},
+             "stdio": shlex.join([str(ROOT / "hosts/rust/target/release/host"), "--stdio"])},
 }
 TRANSPORTS = ("http", "grpc", "stdio")
 STDIO_TIMEOUT = 10.0
