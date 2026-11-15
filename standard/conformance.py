@@ -19,17 +19,13 @@ import yaml
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools.polycell.guards import parse_guard
+from tools.polycell.purity import IMPURE, has_forbidden_io
 
 URN = re.compile(r"^urn:wm:cell:(?P<ns>[a-z0-9_-]+):(?P<name>[a-z0-9_.]+):v(?P<major>[0-9]+)$")
 LANGS = {"python": "py", "ts": "ts", "rust": "rs"}
 SCALARS = {"string", "int32", "int64", "double", "bool", "json"}
 EFFECTS = {"pure", "read_data", "write_data", "local_write", "external", "credential_use"}
 HEADER = re.compile(r"polycell:\s*urn=(?P<urn>\S+)\s+contract=(?P<hash>[0-9a-f]{12})")
-IMPURE = {  # zakazane w komórkach z effects=[pure]; transport i I/O należą do hostów
-    "py": re.compile(r"^\s*(import|from)\s+(socket|subprocess|requests|httpx|urllib|psycopg|sqlite3|grpc)\b|os\.system|open\(", re.M),
-    "ts": re.compile(r"from\s+\"node:(fs|net|http|child_process)\"|\bfetch\(|require\(", re.M),
-    "rs": re.compile(r"std::(net|fs|process)|reqwest|tokio::net", re.M),
-}
 
 
 def interface_hash(raw: dict) -> str:
@@ -94,7 +90,7 @@ def run(root: Path) -> list[dict]:
             add("PC003", "error", f"STALE: {cell.relative_to(root)} implements contract {h['hash']}, current {interface_hash(raw)} -> make prompt CELL={alias}")
         if "generate me" in text:
             add("PC003", "warning", f"STUB: {cell.relative_to(root)} not implemented yet")
-        if (raw.get("effects") or ["pure"]) == ["pure"] and IMPURE[ext].search(text):
+        if (raw.get("effects") or ["pure"]) == ["pure"] and has_forbidden_io(ext, text):
             add("PC008", "error", f"{cell.relative_to(root)}: I/O or transport inside a pure cell")
         if not raw.get("examples"):
             add("PC005", "warning", f"{urn}: no examples -> no contract tests")

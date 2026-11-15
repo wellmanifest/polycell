@@ -1,0 +1,27 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-032",
+  "summary": "Reject console and logging I/O in pure cell implementations",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "regression"
+  },
+  "allowedPaths": [
+    "project/ticket-032/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "standard/conformance.py",
+    "tests/test_purity.py",
+    "tools/polycell/package.py",
+    "tools/polycell/purity.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null
+}

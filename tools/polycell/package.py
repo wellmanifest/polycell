@@ -22,7 +22,8 @@ from jsonschema.exceptions import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from standard.conformance import HEADER, IMPURE, interface_hash
+from standard.conformance import HEADER, interface_hash
+from tools.polycell.purity import has_forbidden_io
 from tools.polycell.model import TypeRef, URN_RE, runtime_name, validate_contract_set
 
 EXT = {"python": "py", "ts": "ts", "rust": "rs"}
@@ -139,7 +140,7 @@ def verify(directory: Path) -> dict:
     header = HEADER.search("\n".join(text.splitlines()[:5]))
     if not header or header["urn"] != manifest["urn"] or header["hash"] != manifest["contract"]:
         raise ValueError("implementation has a stale/missing contract header")
-    if IMPURE[EXT[manifest["owner"]]].search(text):
+    if has_forbidden_io(EXT[manifest["owner"]], text):
         raise ValueError("known I/O pattern inside a pure cell")
     validate_cases(directory, manifest, contract)
     return manifest
