@@ -465,6 +465,66 @@ class StdioDeadlineTests(unittest.TestCase):
             os.kill(observed['pid'], 0)
 
 
+class StdioStartupTests(unittest.TestCase):
+    def setUp(self):
+        self.processes = []
+        original_spawn = subprocess.Popen
+
+        def spawn(*args, **kwargs):
+            process = original_spawn(*args, **kwargs)
+            self.processes.append(process)
+            return process
+
+        self.enterContext(patch.object(transport.subprocess, 'Popen', side_effect=spawn))
+        self.enterContext(patch.dict(transport._stdio, {}, clear=True))
+        command = shlex.join([sys.executable, '-u', '-c',
+            'import json,sys\nfor line in sys.stdin:\n'
+            ' request=json.loads(line)\n'
+            ' print(json.dumps({"urn":request["urn"],"ok":True,"output":request["input"],'
+            '"error":"","lang":"python","duration_ms":0,"contract":"fixture"}),flush=True)\n'])
+        self.enterContext(patch.dict(os.environ, {'HOST_PYTHON_STDIO': command}))
+        self.addCleanup(self.close_processes)
+
+    def close_processes(self):
+        transport._close_stdio()
+        for process in self.processes:
+            if process.poll() is None:
+                if os.name == 'posix':
+                    os.killpg(process.pid, signal.SIGKILL)
+                else:
+                    process.kill()
+            process.wait(timeout=3)
+            process.stdin.close()
+            process.stdout.close()
+
+    def assert_reaped(self, process):
+        self.assertIsNotNone(process.poll(), 'failed constructor orphaned the host')
+        self.assertTrue(process.stdin.closed and process.stdout.closed)
+        self.assertEqual({}, transport._stdio)
+
+    def test_worker_start_failure_reaps_host_and_later_call_recovers(self):
+        with patch.object(transport.threading.Thread, 'start',
+                          side_effect=RuntimeError('worker thread unavailable')):
+            failed = transport.call('python', 'stdio', 'urn:wm:probe', {'value': 1})
+        self.assertIs(failed['ok'], False)
+        self.assertIn('worker thread unavailable', failed['error'])
+        self.assertEqual(1, len(self.processes), 'failed requests must not be replayed')
+        self.assert_reaped(self.processes[0])
+        recovered = transport.call('python', 'stdio', 'urn:wm:probe', {'value': 2})
+        self.assertIs(recovered['ok'], True, recovered)
+        self.assertEqual({'value': 2}, recovered['output'])
+        self.assertEqual(2, len(self.processes))
+
+    def test_interrupted_worker_start_reaps_host_and_preserves_exception(self):
+        interruption = KeyboardInterrupt('worker startup interrupted')
+        with patch.object(transport.threading.Thread, 'start', side_effect=interruption):
+            with self.assertRaises(KeyboardInterrupt) as failure:
+                transport._Stdio(transport.addr('python', 'stdio'))
+        self.assertIs(interruption, failure.exception)
+        self.assertEqual(1, len(self.processes))
+        self.assert_reaped(self.processes[0])
+
+
 class StdioProcessGroupTests(unittest.TestCase):
     @unittest.skipUnless(os.name == 'posix', 'stdio process groups require POSIX')
     def test_timeout_cleans_descendants_after_exited_launcher(self):
