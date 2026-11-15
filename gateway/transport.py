@@ -63,15 +63,19 @@ class _Stdio:
     """Długo żyjący proces hosta w trybie --stdio (np. jako narzędzie CLI / sidecar bez sieci)."""
 
     def __init__(self, cmd: str):
-        self.p = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                  stderr=subprocess.DEVNULL, text=True, bufsize=1,
-                                  start_new_session=os.name == "posix")
         self.lock = threading.Lock()
         self.closed = threading.Event()
         self.requests = queue.Queue(maxsize=1)
         self._close_lock = threading.Lock()
         self.worker = threading.Thread(target=self._serve, name="polycell-stdio", daemon=True)
-        self.worker.start()
+        self.p = subprocess.Popen(shlex.split(cmd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                  stderr=subprocess.DEVNULL, text=True, bufsize=1,
+                                  start_new_session=os.name == "posix")
+        try:
+            self.worker.start()
+        except BaseException:
+            self.close()
+            raise
 
     def _serve(self):
         try:
@@ -122,7 +126,10 @@ class _Stdio:
                     self.requests.put_nowait(None)
                 except queue.Full:
                     pass
-        if threading.current_thread() is not self.worker:
+        if self.worker.ident is None:
+            self.p.stdin.close()
+            self.p.stdout.close()
+        elif threading.current_thread() is not self.worker:
             self.worker.join(timeout=1)
 
     def call(self, urn, data, trace_id, timeout=STDIO_TIMEOUT):
