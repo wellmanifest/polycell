@@ -179,6 +179,36 @@ class MCPTests(unittest.TestCase):
                     self.assertIn("error", mcp.handle(message))
             call.assert_not_called()
 
+    def test_stdio_rejects_nonfinite_numbers_before_dispatch_and_recovers(self):
+        literals = ("NaN", "Infinity", "-Infinity", "1e400", "-1e400")
+        messages = []
+        for literal in literals:
+            messages.append('{"jsonrpc":"2.0","id":' + literal + ',"method":"tools/list"}')
+            request = tool_request()
+            request["params"] = {"name": "shipping_cost", "arguments": {"value": ["NUMBER"]}}
+            messages.append(json.dumps(request).replace('"NUMBER"', literal))
+        for index, literal in enumerate(literals[:3], start=20):
+            messages.append(json.dumps({"jsonrpc": "2.0", "id": index, "method": "tools/call",
+                                        "params": {"name": "shipping_cost", "arguments": {"value": [literal]}}}))
+        messages.append(json.dumps({"jsonrpc": "2.0", "id": 30, "method": "tools/list"}))
+        with gateway_reply(b'{"ok":true}') as (base, calls):
+            result = subprocess.run([sys.executable, "-m", "gateway.mcp"],
+                                    input="\n".join(messages) + "\n", text=True, capture_output=True,
+                                    env={**os.environ, "WM_GATEWAY_URL": base}, timeout=10, check=True)
+            responses = [json.loads(line) for line in result.stdout.splitlines()]
+            self.assertEqual(len(messages), len(responses))
+            for response in responses[:10]:
+                self.assertEqual({"jsonrpc": "2.0", "id": None,
+                                  "error": {"code": -32700, "message": "Parse error"}}, response)
+            for index, response in enumerate(responses[10:13], start=20):
+                self.assertEqual(index, response["id"])
+                self.assertFalse(response["result"]["isError"])
+            self.assertEqual(30, responses[-1]["id"])
+            self.assertIn("tools", responses[-1]["result"])
+            json.dumps(responses, allow_nan=False)
+            self.assertEqual([("/api/cells/shipping.cost", {"value": [literal]})
+                              for literal in literals[:3]], calls)
+
     def test_process_prefix_in_cell_name_dispatches_to_cell(self):
         message = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "process_foo"}}
         with patch.dict(mcp.ROUTES, {"process_foo": [("cell", "process.foo")]}, clear=True), \

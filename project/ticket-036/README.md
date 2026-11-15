@@ -31,8 +31,13 @@ No cell, host, transport, dependency or governance changes.
 Eight initial test methods expose twelve bounded self-copy failures on old
 source. All 47 focused package tests now pass, including path aliases, warm
 protobuf copying, nested warm dependencies, .run output and existing Git gates.
-Continue with the published MCP integration, full regression, real qualification
-and application scenarios before independent protected publication.
+The published MCP integration passes all 230 regression tests and governance.
+Real Docker qualification and Git bundle round trips pass for Python, TypeScript
+and Rust, with no new generator calls. All 45 parity calls pass. Live PGlite
+scenarios exposed a native timestamp-loader crash in the existing Psycopg pin;
+separately scoped ticket-037 supplies the prerequisite dependency repair.
+Continue application scenarios on that independently published dependency before
+protected publication of this guard.
 
 ## Tracking boundary
 
