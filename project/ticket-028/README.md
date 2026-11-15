@@ -36,3 +36,11 @@ All179 application tests pass in39.304s with owned nonGit tmpfs TMPDIR; every ex
 ## Portable runtime and freeze
 
 The original generated TypeScript function is unchanged (SHA256108dcd77c13bd68152e02229cedc687dda44aef7a4873d6f55eef5eb4f68ebba), with zero new inference calls. Its assembled application passes HTTP/gRPC/stdio, two TestQL scenarios, three portable tests, SQLite persistence, MCP and strict finite-JSON controls inside a pinned networkless read-only UID65534 container in36.419s. The exported transport bytes match this checkout. Implementation and tracked carriers freeze at2026-11-15T14:37:19.748528+00:00; only protected publication remains.
+
+## CI budget correction and direct descendant oracle
+
+The first author head ff68eaf passed both native application CI jobs, but required governance rejected the intent: class XS defaults to10minutes, while the initial estimate was20. Correct the estimate to10 without changing XS, allowed paths or any file/component/interface/dependency cap. Preserve that failed head and original planning entry as history; no policy is weakened. The original production change and first regression were finished before the10minute source window; qualification and delivery continued afterward.
+
+A bounded follow-up implementation stage runs from2026-11-15T15:02:17.399893+00:00 to2026-11-15T15:12:17.399893+00:00, maximum10minutes, under the same owner and lease2/fence2 with unchanged expiry. Add a real descendant-lifetime oracle: an inherited child keeps a control connection open until process death, so the test verifies termination directly as well as worker/pipes/cache cleanup. The transport production code stays identical to the already qualified author head. Re-run focused/full native qualification and obtain fresh exact-head CI and independent review.
+
+The direct descendant-death oracle passes: the inherited control connection reaches EOF after cleanup, in addition to stopped-worker/closed-pipe/cache assertions. The complete179-test suite passes again in99.275s without changed request deadlines. The bounded follow-up and carriers freeze at2026-11-15T15:07:21.068331+00:00, before the10minute stage deadline. Production transport bytes remain identical to ff68eaf.

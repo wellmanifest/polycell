@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import shlex
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -469,14 +470,21 @@ class StdioProcessGroupTests(unittest.TestCase):
     def test_timeout_cleans_descendants_after_exited_launcher(self):
         clients = []
         original_spawn = transport._Stdio
+        control = self.enterContext(socket.socket())
+        control.bind(('127.0.0.1', 0))
+        control.listen(1)
+        control.settimeout(3)
+        descendant = (
+            'import socket,sys,time;from pathlib import Path;'
+            f'connection=socket.create_connection(("127.0.0.1",{control.getsockname()[1]}),timeout=3);'
+            'Path(sys.argv[1]).touch();time.sleep(60)')
         with tempfile.TemporaryDirectory() as directory:
             launcher = Path(directory) / 'launcher.py'
             ready = Path(directory) / 'descendant.ready'
             launcher.write_text(
                 'import os,subprocess,sys,time\nfrom pathlib import Path\n'
                 'ready=Path(sys.argv[1])\n'
-                'child="import sys,time;from pathlib import Path;'
-                'Path(sys.argv[1]).touch();time.sleep(60)"\n'
+                f'child={descendant!r}\n'
                 'subprocess.Popen([sys.executable,"-c",child,str(ready)])\n'
                 'while not ready.exists():\n time.sleep(0.005)\n'
                 'os._exit(0)\n')
@@ -504,6 +512,10 @@ class StdioProcessGroupTests(unittest.TestCase):
                     self.assertTrue(client.closed.is_set())
                     self.assertFalse(client.worker.is_alive(), 'descendant still holds stdio open')
                     self.assertTrue(client.p.stdin.closed and client.p.stdout.closed)
+                    connection, _ = control.accept()
+                    with connection:
+                        connection.settimeout(3)
+                        self.assertEqual(b'', connection.recv(1), 'descendant survived cleanup')
                 finally:
                     # Bound the old implementation too when this regression fails.
                     for client in clients:

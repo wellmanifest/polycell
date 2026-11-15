@@ -32,7 +32,7 @@
       "Preserve peer027 path quoting and every foreign checkout/lease"
     ],
     "complexity": "XS",
-    "estimatedMinutes": 20,
+    "estimatedMinutes": 10,
     "budgets": {
       "maxImplementationFiles": 2,
       "maxAffectedComponents": 1,
