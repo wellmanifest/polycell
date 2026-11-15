@@ -18,6 +18,7 @@ import tempfile
 
 import yaml
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -27,6 +28,10 @@ from tools.polycell.model import TypeRef, URN_RE, runtime_name, validate_contrac
 EXT = {"python": "py", "ts": "ts", "rust": "rs"}
 ARTIFACTS = {"contract.cell.yaml", "cases.json", "types.txt", "prompt.md", "input.schema.json", "output.schema.json"}
 RUNTIME_DIRS = ("tools", "standard", "integrations", "hosts", "proto", "gateway", "db", "docker", "twin")
+
+
+class PackageValidationError(ValueError):
+    """Newly written package contents failed verification."""
 
 
 def digest(data: bytes) -> str:
@@ -152,7 +157,10 @@ def write_package(out: Path, identity: dict, files: dict[str, bytes]) -> dict:
                 raise ValueError("non-flat package file")
             (out / name).write_bytes(value)
         (out / "package.json").write_bytes(json_bytes(manifest))
-        verify(out)
+        try:
+            verify(out)
+        except (ValueError, ValidationError) as error:
+            raise PackageValidationError(str(error)) from error
     except Exception:
         shutil.rmtree(out)
         raise
