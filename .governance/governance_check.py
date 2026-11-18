@@ -35,7 +35,7 @@ _previous_bytecode_policy = sys.dont_write_bytecode
 sys.dont_write_bytecode = True
 try:
     try:
-        from ticket_activity import (ActivityError, delivery_landed,
+        from ticket_activity import (ActivityError, ActivityReadBatch, delivery_landed,
                                      parse_ticket_state_text as _shared_ticket_state,
                                      resolve as resolve_ticket_activity)
     except ModuleNotFoundError:
@@ -48,6 +48,7 @@ try:
         sys.modules[_activity_spec.name] = _activity_module
         _activity_spec.loader.exec_module(_activity_module)
         ActivityError = _activity_module.ActivityError
+        ActivityReadBatch = _activity_module.ActivityReadBatch
         delivery_landed = _activity_module.delivery_landed
         resolve_ticket_activity = _activity_module.resolve
         _shared_ticket_state = _activity_module.parse_ticket_state_text
@@ -992,7 +993,7 @@ def placement_error(value: Any) -> str | None:
     if runtime_owner is not None and (not isinstance(runtime_owner, str) or runtime_owner not in PLACEMENT_HOMES):
         return "placement runtimeOwner is invalid"
     if value["home"] == "wellmanifest" and value["shape"] == "runtime_service":
-        return "runtime_service must not HOME wellmanifest; ADOPT packs from a product organization"
+        return "runtime_service must not HOME wellmanifest; HOME in a product organization and ADOPT wellmanifest packs"
     adopt = value.get("adopt")
     if adopt is not None and (
         not string_list(adopt) or not all(PLACEMENT_ADOPT.fullmatch(item) for item in adopt)
@@ -2033,6 +2034,38 @@ def active_ticket_records(
 ) -> list[TicketRecord]:
     """Return live reservations from the shared status/receipt resolver."""
     active_statuses = set(config.get("activeStatuses", ACTIVE_DEFAULT))
+    projected = [record for record in records if record.status in active_statuses]
+    if not projected:
+        return []
+    try:
+        with ActivityReadBatch(root):
+            return _resolve_active_ticket_records(root, config, projected, report)
+    except ActivityError as error:
+        # Inactivity is accepted only after the whole batch revalidates. A
+        # changed input invalidates every terminal result from this inspection.
+        _report_activity_error(root, projected[0], error, report)
+        return projected
+
+
+def _report_activity_error(
+    root: Path, record: TicketRecord, error: ActivityError, report: Report | None,
+) -> None:
+    if report is not None and not any(
+        finding.code == TICKET_ACTIVITY_ERROR for finding in report.findings
+    ):
+        report.add(
+            TICKET_ACTIVITY_ERROR,
+            f"Ticket activity could not be resolved safely: {error}",
+            "Reconcile or quarantine the clone-external registry from protected evidence; follow error/GOV-TICKET-ACTIVITY.md.",
+            [rel(root, record.directory / "README.md")],
+            {"ticket": record.directory.name, "fallback": "remain-active"},
+        )
+
+
+def _resolve_active_ticket_records(
+    root: Path, config: dict[str, Any], records: list[TicketRecord], report: Report | None,
+) -> list[TicketRecord]:
+    active_statuses = set(config.get("activeStatuses", ACTIVE_DEFAULT))
     active: list[TicketRecord] = []
     for record in records:
         if record.status not in active_statuses:
@@ -2044,16 +2077,7 @@ def active_ticket_records(
             # A broken optional cache must never fabricate terminal authority.
             # Keep the projection active and expose one stable, recoverable error.
             active.append(record)
-            if report is not None and not any(
-                finding.code == TICKET_ACTIVITY_ERROR for finding in report.findings
-            ):
-                report.add(
-                    TICKET_ACTIVITY_ERROR,
-                    f"Ticket activity could not be resolved safely: {error}",
-                    "Reconcile or quarantine the clone-external registry from protected evidence; follow error/GOV-TICKET-ACTIVITY.md.",
-                    [rel(root, record.directory / "README.md")],
-                    {"ticket": record.directory.name, "fallback": "remain-active"},
-                )
+            _report_activity_error(root, record, error, report)
             continue
         if resolution.active:
             active.append(record)
@@ -2292,6 +2316,24 @@ def add_adoption_docker_bindings(root: Path, manifest: dict[str, Any], bindings:
                 )
 
 
+WELLMAN_SCAFFOLD_PROFILES = frozenset({
+    "wellmanifest/new-project",
+    "profile:baseline",
+    "profile:domain-pack",
+    "profile:runtime-service",
+    "profile:agent-executor",
+    "profile:deployment",
+    "profile:embedded-fleet",
+    "profile:full",
+})
+WELLMAN_SCAFFOLD_VERSION_RE = re.compile(
+    r"\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    r"(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?\Z"
+)
+
+
 def initial_adoption_seed_paths(root: Path, base: str, revision: str,
                                 manifest: dict[str, Any]) -> set[str]:
     """Closed required seeds; neither existing ownership nor writer authority."""
@@ -2312,8 +2354,9 @@ def initial_adoption_seed_paths(root: Path, base: str, revision: str,
         if (not isinstance(original, dict) or set(original) != {"schema", "standard"}
                 or original.get("schema") != "wellmanifest.manifest/v1"
                 or not isinstance(standard, dict) or set(standard) != {"id", "version"}
-                or standard.get("id") != "profile:baseline"
-                or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", str(standard.get("version", ""))) is None):
+                or standard.get("id") not in WELLMAN_SCAFFOLD_PROFILES
+                or not isinstance(standard.get("version"), str)
+                or WELLMAN_SCAFFOLD_VERSION_RE.fullmatch(standard["version"]) is None):
             return set()
     for name in native:
         path = root / name
@@ -2533,17 +2576,33 @@ def check_scope_overlaps(
     governance_patterns: list[str],
     report: Report,
 ) -> None:
+    if len(valid_active) < 2:
+        return
+    # Match each ticket against repository paths once, rather than repeating
+    # that work for every pair. Positions retain duplicate counts and the
+    # original first-20 selection before Report canonicalizes the paths.
+    candidates = [(index, path) for index, path in enumerate(files)
+                  if not matches(path, governance_patterns)]
+    matching_positions: list[set[int]] = []
+    for record in valid_active:
+        assert record.intent is not None
+        matching_positions.append({
+            index for index, path in candidates
+            if matches(path, record.intent["allowedPaths"])
+            and not matches(path, record.intent["forbiddenPaths"])
+        })
     for index, first in enumerate(valid_active):
-        for second in valid_active[index + 1:]:
-            shared_files = ticket_shared_files(first, second, files, governance_patterns)
+        for second_index in range(index + 1, len(valid_active)):
+            second = valid_active[second_index]
+            shared_positions = matching_positions[index] & matching_positions[second_index]
             overlapping_patterns = ticket_overlapping_patterns(first, second, governance_patterns)
-            if shared_files or overlapping_patterns:
+            if shared_positions or overlapping_patterns:
                 report.add(
                     "GOV-WORKSTREAM-004",
                     f"Active ticket scopes overlap: {first.directory.name} and {second.directory.name}.",
                     "Narrow one allowedPaths declaration, serialize the work, or route the shared contract through integration.",
-                    shared_files[:20],
-                    {"tickets": [first.directory.name, second.directory.name], "overlappingPatterns": overlapping_patterns, "concretePathCount": len(shared_files)},
+                    [files[position] for position in sorted(shared_positions)[:20]],
+                    {"tickets": [first.directory.name, second.directory.name], "overlappingPatterns": overlapping_patterns, "concretePathCount": len(shared_positions)},
                 )
 
 
@@ -3022,6 +3081,86 @@ def _extract_cargo_version(content: str) -> str | None:
     return _section_aware_toml_version(content, ("package",))
 
 
+def _read_bounded_regular_utf8(path: Path, resolved_root: Path, max_bytes: int) -> str | None:
+    resolved_path = path.resolve()
+    resolved_path.relative_to(resolved_root)
+    open_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    fd = os.open(path, open_flags)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > max_bytes:
+            return None
+        chunks: list[bytes] = []
+        total = 0
+        while total <= max_bytes:
+            chunk = os.read(fd, min(65536, max_bytes + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        if total > max_bytes:
+            return None
+        return b"".join(chunks).decode("utf-8")
+    finally:
+        os.close(fd)
+
+
+def _enclosing_subpackage_version(
+    root: Path,
+    resolved_root: Path,
+    init_file: Path,
+    max_bytes: int,
+    report: Report,
+) -> tuple[str | None, str | None, bool]:
+    anc = init_file.parent
+    while anc != root:
+        for manifest_name in ("pyproject.toml", "setup.py"):
+            candidate = anc / manifest_name
+            if candidate.is_symlink():
+                rel_c = rel(root, candidate)
+                report.add(
+                    "GOV-VERSION-001",
+                    f"Symlinked nested package manifest {rel_c} is forbidden in version parity scan.",
+                    "Replace symlinked nested package manifest with a regular repository-contained file.",
+                    [rel_c],
+                )
+                return None, None, True
+            if not os.path.lexists(candidate):
+                continue
+            rel_c = rel(root, candidate)
+            try:
+                content = _read_bounded_regular_utf8(candidate, resolved_root, max_bytes)
+            except (OSError, UnicodeDecodeError, ValueError):
+                content = None
+            if content is None:
+                report.add(
+                    "GOV-VERSION-001",
+                    f"Nested package manifest {rel_c} is unreadable, non-regular, or oversized in version parity scan.",
+                    "Ensure nested package manifests are regular UTF-8 files within size bounds.",
+                    [rel_c],
+                )
+                return None, None, True
+            if manifest_name == "pyproject.toml":
+                if tomllib is not None:
+                    try:
+                        tomllib.loads(content)
+                    except Exception:
+                        report.add(
+                            "GOV-VERSION-001",
+                            f"Nested pyproject.toml {rel_c} contains invalid TOML syntax.",
+                            "Fix TOML syntax in the nested pyproject.toml.",
+                            [rel_c],
+                        )
+                        return None, None, True
+                sub_v = _extract_pyproject_version(content)
+            else:
+                sub_v = _extract_setup_py_version(content)
+            if sub_v:
+                return sub_v, rel_c, False
+        anc = anc.parent
+    return None, None, False
+
+
 def check_version_parity(root: Path, manifest: dict[str, Any], report: Report) -> None:
     try:
         version_path = safe_repo_path(root, "VERSION")
@@ -3144,31 +3283,27 @@ def check_version_parity(root: Path, manifest: dict[str, Any], report: Report) -
             )
             continue
         try:
-            resolved_init = init_file.resolve()
-            resolved_init.relative_to(resolved_root)
-            open_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
-            fd = os.open(init_file, open_flags)
-            try:
-                st = os.fstat(fd)
-                if not stat.S_ISREG(st.st_mode) or st.st_size > max_init_bytes:
-                    continue
-                chunks: list[bytes] = []
-                total = 0
-                while total <= max_init_bytes:
-                    chunk = os.read(fd, min(65536, max_init_bytes + 1 - total))
-                    if not chunk:
-                        break
-                    chunks.append(chunk)
-                    total += len(chunk)
-                if total > max_init_bytes:
-                    continue
-                text = b"".join(chunks).decode("utf-8")
-            finally:
-                os.close(fd)
+            text = _read_bounded_regular_utf8(init_file, resolved_root, max_init_bytes)
+            if text is None:
+                continue
             m = re.search(r'^__version__\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)
             if m:
                 found_v = m.group(1).strip()
-                if found_v != raw_version:
+                sub_v, sub_source, failed = _enclosing_subpackage_version(
+                    root, resolved_root, init_file, max_init_bytes, report
+                )
+                if failed:
+                    continue
+                if sub_v is not None and sub_source is not None:
+                    if found_v != sub_v:
+                        rel_p = rel(root, init_file)
+                        report.add(
+                            "GOV-VERSION-001",
+                            f"Static __version__ '{found_v}' in {rel_p} does not match enclosing {sub_source} version '{sub_v}'.",
+                            f"Synchronize __version__ in {rel_p} with {sub_source} or use dynamic version discovery.",
+                            [rel_p, sub_source],
+                        )
+                elif found_v != raw_version:
                     rel_p = rel(root, init_file)
                     report.add(
                         "GOV-VERSION-001",
@@ -4492,6 +4627,61 @@ def standard_adoption_records(active: list[TicketRecord]) -> list[TicketRecord]:
     ]
 
 
+def _record_ticket_dir_and_prefix(root: Path, record: Any) -> tuple[Path | None, str | None]:
+    ticket_dir = getattr(record, "directory", None)
+    if not isinstance(ticket_dir, Path):
+        return None, None
+    resolved_dir = ticket_dir if ticket_dir.is_absolute() else root / ticket_dir
+    try:
+        rel_dir = resolved_dir.resolve().relative_to(root.resolve()).as_posix().rstrip("/")
+    except ValueError:
+        rel_dir = ticket_dir.as_posix().rstrip("/") if not ticket_dir.is_absolute() else None
+    return resolved_dir, (f"{rel_dir}/" if rel_dir else None)
+
+
+def _is_clean_target_head(root: Path, target_ref: str, head: str) -> bool:
+    try:
+        target_sha = git_output(root, ["rev-parse", "--verify", f"{target_ref}^{{commit}}"]).decode().strip()
+        head_sha = git_output(root, ["rev-parse", "--verify", f"{head}^{{commit}}"]).decode().strip()
+        if not target_sha or head_sha != target_sha:
+            return False
+        return not git_output(root, ["status", "--porcelain", "--untracked-files=all"]).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
+
+def unlanded_standard_adoption_records(
+    root: Path,
+    active: list[TicketRecord],
+    changed: list[str] | None = None,
+    *,
+    require_clean_target_head: bool = False,
+    head: str = "HEAD",
+) -> list[TicketRecord]:
+    unlanded: list[TicketRecord] = []
+    for record in standard_adoption_records(active):
+        if record.intent is None:
+            continue
+        delivery = record.intent.get("delivery")
+        if not isinstance(delivery, dict):
+            continue
+        ticket_dir, prefix = _record_ticket_dir_and_prefix(root, record)
+        if changed and prefix and any(path.startswith(prefix) for path in changed):
+            unlanded.append(record)
+            continue
+        target_branch = delivery.get("targetBranch")
+        if ticket_dir is not None and isinstance(target_branch, str) and target_branch:
+            target_ref = f"refs/remotes/origin/{target_branch}"
+            if not require_clean_target_head or _is_clean_target_head(root, target_ref, head):
+                try:
+                    if delivery_landed(root, ticket_dir, target_ref):
+                        continue
+                except Exception:
+                    pass
+        unlanded.append(record)
+    return unlanded
+
+
 def load_standard_adoption_evidence(
     root: Path,
     base: str,
@@ -4667,8 +4857,11 @@ def atomic_standard_adoption_paths(
     changed: list[str],
     active: list[TicketRecord],
     report: Report,
+    head: str = "HEAD",
 ) -> set[str]:
-    records = standard_adoption_records(active)
+    records = unlanded_standard_adoption_records(
+        root, active, changed, require_clean_target_head=(base is None), head=head,
+    )
     if not records:
         return set()
     evidence_paths = [".governance/manifest.lock.json", ".governance/package-manifest.json"]
@@ -4969,27 +5162,10 @@ def resolve_validation_base(
     if supplied_base is not None:
         return supplied_base
     active = active_records if active_records is not None else active_ticket_records(root, config, records)
-    adoption_records = standard_adoption_records(active)
     # If an adoption ticket's delivery is already landed on its target branch,
     # its prose status remains active only because terminal receipts were not recorded.
     # Exclude landed adoptions so subsequent tickets do not have their validation base poisoned.
-    unlanded_adoptions = []
-    for record in adoption_records:
-        if record.intent is None:
-            continue
-        delivery = record.intent.get("delivery")
-        if not isinstance(delivery, dict):
-            continue
-        ticket_dir = getattr(record, "directory", None)
-        target_branch = delivery.get("targetBranch")
-        if ticket_dir is not None and target_branch:
-            target_ref = f"refs/remotes/origin/{target_branch}"
-            try:
-                if delivery_landed(root, ticket_dir, target_ref):
-                    continue
-            except Exception:
-                pass
-        unlanded_adoptions.append(record)
+    unlanded_adoptions = unlanded_standard_adoption_records(root, active)
     deliveries = [record.intent["delivery"] for record in unlanded_adoptions if record.intent is not None]
     if not deliveries:
         return None
@@ -5375,7 +5551,7 @@ def run_governance_checks(
         if any(path.startswith(f"{rel(root, record.directory).rstrip('/')}/") for path in changed)
     ]
     adoption_paths = atomic_standard_adoption_paths(
-        root, base, changed, changed_active or active, report,
+        root, base, changed, changed_active or active, report, args.head,
     )
     timed_step(report, "load_work_classification", load_work_classification, root, report, args.work_classification)
     timed_step(report, "check_lock", check_lock, root, lock_path, manifest, report)
