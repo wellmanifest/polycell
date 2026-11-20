@@ -59,6 +59,9 @@ def invoke(urn: str, data: dict, trace_id: str = "") -> dict:
         res["error"] = f"{type(e).__name__}: {e}"
     res["duration_ms"] = round((time.perf_counter() - t0) * 1000, 3)
     log(event="invoke", urn=urn, ok=res["ok"], ms=res["duration_ms"], trace_id=trace_id, error=res["error"] or None)
+    if os.environ.get("URTLOG_STATE_DIR"):
+        from urtlog_bridge import maybe_emit_polycell_invoke
+        maybe_emit_polycell_invoke(urn, data, res, trace_id=trace_id)
     return res
 
 
