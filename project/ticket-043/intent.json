@@ -1,0 +1,84 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-043",
+  "summary": "Update application dependencies to latest minor versions (projan deps)",
+  "workstream": "application",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "project/ticket-043/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "db/pglite/package-lock.json",
+    "db/pglite/package.json",
+    "hosts/rust/Cargo.lock",
+    "hosts/ts/package-lock.json",
+    "hosts/ts/package.json"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "1d5629efe6adaeeda0409c442e7c68b09b9a997a",
+    "targetBranch": "main",
+    "outcome": "Projan deps rollout: 4 version declaration(s) updated to the newest published minor-level versions; lockfiles re-resolved.",
+    "nonGoals": [
+      "No source code, interface or behaviour changes",
+      "No dependency additions or removals"
+    ],
+    "complexity": "S",
+    "estimatedMinutes": 30,
+    "budgets": {
+      "maxAffectedComponents": 1,
+      "maxImplementationFiles": 5,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Version declarations are rewritten in place by projan deps with their operators, markers and precision preserved; lockfiles are re-resolved by their own managers.",
+      "components": [
+        {
+          "name": "dependency-manifests",
+          "paths": [
+            "db/pglite/package-lock.json",
+            "db/pglite/package.json",
+            "hosts/rust/Cargo.lock",
+            "hosts/ts/package-lock.json",
+            "hosts/ts/package.json"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert this pull request through protected review."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "npm install --package-lock-only --ignore-scripts --no-audit --no-fund",
+          "npm update --package-lock-only --ignore-scripts --no-audit --no-fund",
+          "cargo update",
+          "cargo metadata --format-version 1 --quiet",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "Lockfiles re-resolved and resolution verified by projan deps apply"
+      }
+    ]
+  }
+}
