@@ -1,5 +1,5 @@
-grpcio==1.85.1
-grpcio-tools==1.85.1
+grpcio==1.85.3
+grpcio-tools==1.85.3
 PyYAML==6.0.3
 # 3.3.6 binary loaders crash on PGlite timestamp results; retain the validated pin.
 psycopg[binary]==3.3.9
