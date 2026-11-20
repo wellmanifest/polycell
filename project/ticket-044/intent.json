@@ -1,0 +1,73 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-044",
+  "summary": "Update integration dependencies to latest minor versions (projan deps)",
+  "workstream": "integration",
+  "classification": {
+    "kind": "SERVICE",
+    "priority": "P2",
+    "origin": "health"
+  },
+  "allowedPaths": [
+    "project/ticket-044/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "requirements.txt"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null,
+  "delivery": {
+    "acceptedBaseSha": "1d5629efe6adaeeda0409c442e7c68b09b9a997a",
+    "targetBranch": "main",
+    "outcome": "Projan deps rollout: 2 version declaration(s) updated to the newest published minor-level versions; lockfiles re-resolved.",
+    "nonGoals": [
+      "No source code, interface or behaviour changes",
+      "No dependency additions or removals"
+    ],
+    "complexity": "XS",
+    "estimatedMinutes": 10,
+    "budgets": {
+      "maxAffectedComponents": 1,
+      "maxImplementationFiles": 2,
+      "maxPublicInterfaceChanges": 0,
+      "maxRuntimeDependencies": 0
+    },
+    "architecture": {
+      "status": "accepted",
+      "decision": "Version declarations are rewritten in place by projan deps with their operators, markers and precision preserved; lockfiles are re-resolved by their own managers.",
+      "components": [
+        {
+          "name": "dependency-manifests",
+          "paths": [
+            "requirements.txt"
+          ]
+        }
+      ],
+      "responsibilityChanges": false,
+      "interfaceChanges": [],
+      "dataChanges": [],
+      "ui": {
+        "impact": "none",
+        "states": [],
+        "evidence": []
+      },
+      "rollback": "Revert this pull request through protected review."
+    },
+    "runtimeDependencies": [],
+    "validation": [
+      {
+        "criterion": "AC-01",
+        "commands": [
+          "uv pip compile requirements.txt --quiet -o /dev/null",
+          "./project/governance-check.sh"
+        ],
+        "evidence": "Lockfiles re-resolved and resolution verified by projan deps apply"
+      }
+    ]
+  }
+}
