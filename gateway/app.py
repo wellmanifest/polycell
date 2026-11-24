@@ -12,7 +12,7 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import core, transport
+from . import core, poa_registry, transport
 
 UI = core.ROOT / "gateway" / "ui" / "index.html"
 
@@ -56,6 +56,8 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "transport": core.DEFAULT_TRANSPORT, "db": core.db().kind})
         if path == "/api/registry":
             return self._send(200, core.REGISTRY)
+        if path == "/v1/poa/registry":
+            return self._send(200, poa_registry.poa_registry())
         if path == "/api/cells":
             return self._send(200, core.INDEX)
         if path == "/api/hosts":
