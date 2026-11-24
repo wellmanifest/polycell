@@ -11,7 +11,7 @@ import argparse
 import json
 from pathlib import Path
 
-from . import core
+from . import core, poa_registry
 
 
 def _arg(s: str):
@@ -25,6 +25,7 @@ def main():
     p = sub.add_parser("process"); p.add_argument("name"); p.add_argument("json"); p.add_argument("--transport")
     n = sub.add_parser("nl"); n.add_argument("text")
     sub.add_parser("parity")
+    sub.add_parser("poa-registry")
     a = ap.parse_args()
     if a.cmd == "call":
         out = core.invoke(a.cell, _arg(a.json), a.transport)
@@ -32,6 +33,8 @@ def main():
         out = core.run_process(a.name, _arg(a.json), a.transport)
     elif a.cmd == "nl":
         out = core.nl_match(a.text)
+    elif a.cmd == "poa-registry":
+        out = poa_registry.poa_registry()
     else:
         out = core.parity()
     print(json.dumps(out, ensure_ascii=False, indent=2, default=str))
