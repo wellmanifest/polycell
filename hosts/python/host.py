@@ -48,10 +48,12 @@ def mine() -> list[str]:
 
 def invoke(urn: str, data: dict, trace_id: str = "") -> dict:
     t0 = time.perf_counter()
+    metadata = INDEX.get(urn, {})
+    hosted = metadata.get("owner") == LANG
     res = {"urn": urn, "ok": False, "output": None, "error": "", "lang": LANG,
-           "contract": INDEX.get(urn, {}).get("contract", "")}
+           "contract": metadata.get("contract", "")}
     try:
-        if urn not in mine():
+        if not hosted:
             raise KeyError(f"urn not hosted here: {urn}")
         res["output"] = load(urn).run(data)
         res["ok"] = True
@@ -59,7 +61,7 @@ def invoke(urn: str, data: dict, trace_id: str = "") -> dict:
         res["error"] = f"{type(e).__name__}: {e}"
     res["duration_ms"] = round((time.perf_counter() - t0) * 1000, 3)
     log(event="invoke", urn=urn, ok=res["ok"], ms=res["duration_ms"], trace_id=trace_id, error=res["error"] or None)
-    if os.environ.get("URTLOG_STATE_DIR"):
+    if hosted and os.environ.get("URTLOG_STATE_DIR"):
         from urtlog_bridge import maybe_emit_polycell_invoke
         maybe_emit_polycell_invoke(urn, data, res, trace_id=trace_id)
     return res

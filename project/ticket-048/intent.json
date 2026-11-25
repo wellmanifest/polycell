@@ -1,0 +1,26 @@
+{
+  "schema": "new-project.intent/v3",
+  "ticket": "ticket-048",
+  "summary": "Make Polycell URTLog outcomes trustworthy",
+  "workstream": "application",
+  "classification": {
+    "kind": "BUG",
+    "priority": "P1",
+    "origin": "requested"
+  },
+  "allowedPaths": [
+    "project/ticket-048/**",
+    "TODO.md",
+    "project/TICKETS.md",
+    "hosts/python/host.py",
+    "hosts/python/urtlog_bridge.py",
+    "tests/test_python_host_urtlog.py"
+  ],
+  "forbiddenPaths": [
+    "project/ticket-*/user-*.md"
+  ],
+  "stacks": [],
+  "dependsOn": [],
+  "conflictsWith": [],
+  "integrationTicket": null
+}

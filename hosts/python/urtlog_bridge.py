@@ -8,6 +8,10 @@ from pathlib import Path
 from typing import Any
 
 
+class _CellInvocationFailed(Exception):
+    """Signal a failed cell result to the span without exposing its error text."""
+
+
 def maybe_emit_polycell_invoke(
     urn: str,
     data: dict[str, Any],
@@ -32,11 +36,11 @@ def maybe_emit_polycell_invoke(
     commissioned_by = os.environ.get("URTLOG_COMMISSIONED_BY", "").strip() or "polycell:host-python"
     recipients_raw = os.environ.get("URTLOG_RECIPIENTS", "group:ops,heyasa")
     recipients = tuple(r.strip() for r in recipients_raw.split(",") if r.strip())
-    in_hash = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")).hexdigest()[:16]
-    in_urn = f"urn:polycell:input:{in_hash}"
-    out_urn = f"urn:polycell:output:{trace_id or in_hash}"
-
     try:
+        encoded_input = json.dumps(data, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+        in_hash = hashlib.sha256(encoded_input).hexdigest()[:16]
+        in_urn = f"urn:polycell:input:{in_hash}"
+        out_urn = f"urn:polycell:output:{trace_id or in_hash}"
         with UrtClient(Path(raw_dir), source="polycell", repository="wellmanifest/polycell") as client:
             with client.span(
                 urn,
@@ -54,9 +58,9 @@ def maybe_emit_polycell_invoke(
                 if result.get("ok"):
                     sp.commit_output(out_urn, result.get("output") if result.get("output") is not None else {})
                 else:
-                    raise RuntimeError(str(result.get("error") or "cell_invocation_failed"))
+                    raise _CellInvocationFailed("cell invocation failed")
         return {"emitted": True, "urn": urn, "ok": True}
-    except RuntimeError:
+    except _CellInvocationFailed:
         return {"emitted": True, "urn": urn, "ok": False}
     except Exception as exc:  # noqa: BLE001 - optional telemetry must never disrupt cell host
         return {"emitted": False, "reason": f"emit_error:{type(exc).__name__}"}
